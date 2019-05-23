@@ -1,0 +1,16 @@
+[package]
+name = "usbd-serial"
+description = "USB CDC-ACM serial port class for use with usb-device."
+version = "0.1.0"
+edition = "2018"
+readme = "README.md"
+keywords = ["no-std", "usb-device"]
+license = "MIT"
+authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
+repository = "https://github.com/mvirkkunen/usbd-serial"
+
+[dependencies]
+embedded-hal = "0.2.2"
+heapless = "0.4.1"
+nb = "0.1.2"
+usb-device = "0.2.0"
