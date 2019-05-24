@@ -1,3 +1,4 @@
+use core::convert::TryInto;
 use core::mem;
 use usb_device::class_prelude::*;
 use usb_device::Result;
@@ -157,19 +158,14 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
     }
 
     fn control_in(&mut self, xfer: ControlIn<B>) {
+        let req = xfer.request();
+
+        if !(req.request_type == control::RequestType::Class
+            && req.recipient == control::Recipient::Interface
+            && req.index == u8::from(self.comm_if) as u16)
         {
-            let req = xfer.request();
-
-            if !(req.request_type == control::RequestType::Class
-                && req.recipient == control::Recipient::Interface
-                && req.index == u8::from(self.comm_if) as u16)
-            {
-                return;
-            }
+            return;
         }
-
-        // This copy should be avoidable once NLL is implemented
-        let req = *xfer.request();
 
         match req.request {
             // REQ_GET_ENCAPSULATED_COMMAND is not really supported - it will be rejected below.
@@ -188,19 +184,14 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
     }
 
     fn control_out(&mut self, xfer: ControlOut<B>) {
+        let req = xfer.request();
+
+        if !(req.request_type == control::RequestType::Class
+            && req.recipient == control::Recipient::Interface
+            && req.index == u8::from(self.comm_if) as u16)
         {
-            let req = xfer.request();
-
-            if !(req.request_type == control::RequestType::Class
-                && req.recipient == control::Recipient::Interface
-                && req.index == u8::from(self.comm_if) as u16)
-            {
-                return;
-            }
+            return;
         }
-
-        // This copy should be avoidable once NLL is implemented
-        let req = *xfer.request();
 
         match req.request {
             REQ_SEND_ENCAPSULATED_COMMAND => {
@@ -209,10 +200,8 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
                 xfer.accept().ok();
             },
             REQ_SET_LINE_CODING if xfer.data().len() >= 7 => {
-                let mut data_rate: [u8; 4] = unsafe { mem::uninitialized() };
-                data_rate.copy_from_slice(&xfer.data()[0..4]);
-
-                self.line_coding.data_rate = u32::from_le_bytes(data_rate);
+                self.line_coding.data_rate =
+                    u32::from_le_bytes(xfer.data()[0..4].try_into().unwrap());
                 self.line_coding.stop_bits = xfer.data()[4].into();
                 self.line_coding.parity_type = xfer.data()[5].into();
                 self.line_coding.data_bits = xfer.data()[6];
