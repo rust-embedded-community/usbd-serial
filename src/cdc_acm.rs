@@ -6,7 +6,7 @@ use usb_device::Result;
 pub const USB_CLASS_CDC: u8 = 0x02;
 const USB_CLASS_CDC_DATA: u8 = 0x0a;
 const CDC_SUBCLASS_ACM: u8 = 0x02;
-const CDC_PROTOCOL_AT: u8 = 0x01;
+const CDC_PROTOCOL_NONE: u8 = 0x00;
 
 const CS_INTERFACE: u8 = 0x24;
 const CDC_TYPE_HEADER: u8 = 0x00;
@@ -105,7 +105,7 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
             self.comm_if,
             USB_CLASS_CDC,
             CDC_SUBCLASS_ACM,
-            CDC_PROTOCOL_AT)?;
+            CDC_PROTOCOL_NONE)?;
 
         writer.write(
             CS_INTERFACE,
