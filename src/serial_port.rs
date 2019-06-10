@@ -6,19 +6,7 @@ use generic_array::typenum;
 use crate::cdc_acm::*;
 use crate::buffer::Buffer;
 
-#[derive(Eq, PartialEq)]
-enum WriteState {
-    /// Not currently writing anything.
-    Idle = 0,
-
-    /// Writing a short packet.
-    WriteShort = 1,
-
-    /// Writing a full packet that needs to be followed by a short packet.
-    WriteFull = 2,
-}
-
-/// USB serial port (CDC-ACM) class with built-in buffering.
+/// USB (CDC-ACM) serial port with built-in buffering to implement stream-like behavior.
 pub struct SerialPort<'a, B, NRBUF=typenum::U128, NWBUF=typenum::U128>
 where
     B: UsbBus,
@@ -28,7 +16,7 @@ where
     inner: CdcAcmClass<'a, B>,
     read_buf: Buffer<NRBUF>,
     write_buf: Buffer<NWBUF>,
-    write_state: WriteState,
+    need_zlp: bool,
 }
 
 impl<B, NRBUF, NWBUF> SerialPort<'_, B, NRBUF, NWBUF>
@@ -43,7 +31,7 @@ where
             inner: CdcAcmClass::new(alloc, 64),
             write_buf: Buffer::new(),
             read_buf: Buffer::new(),
-            write_state: WriteState::Idle,
+            need_zlp: false,
         }
     }
 
@@ -75,7 +63,7 @@ where
         Ok(self.write_buf.write(data))
     }
 
-    /// Reads bytes from the port and returns the number of bytes read into `data`.
+    /// Reads bytes from the port into `data` and returns the number of bytes read.
     pub fn read(&mut self, data: &mut [u8]) -> Result<usize> {
         let buf = &mut self.read_buf;
         let inner = &mut self.inner;
@@ -110,32 +98,29 @@ where
     /// still unacknowledged data, and other errors if there's an error sending data to the host.
     pub fn flush(&mut self) -> Result<()> {
         let buf = &mut self.write_buf;
+        let inner = &mut self.inner;
+        let need_zlp = &mut self.need_zlp;
 
         if buf.available_read() > 0 {
-            let inner = &mut self.inner;
-            let write_state = &mut self.write_state;
-
             buf.read(inner.max_packet_size() as usize, |buf_data| {
-                match inner.write_packet(buf_data) {
-                    Ok(_) => {
-                        *write_state = if buf_data.len() == inner.max_packet_size() as usize {
-                            WriteState::WriteFull
-                        } else {
-                            WriteState::WriteShort
-                        };
+                inner.write_packet(buf_data)?;
 
-                        Ok(())
-                    },
-                    Err(UsbError::WouldBlock) => Ok(()),
-                    Err(err) => Err(err),
-                }
+                *need_zlp = (buf_data.len() == inner.max_packet_size() as usize);
+
+                Ok(buf_data.len())
             })?;
-        }
 
-        if self.write_state == WriteState::Idle {
-            Ok(())
-        } else {
             Err(UsbError::WouldBlock)
+        } else if *need_zlp {
+            // Write a ZLP to complete the transaction if there's nothing else to write and the last
+            // packet was a full one.
+            inner.write_packet(&[])?;
+
+            *need_zlp = false;
+
+            Err(UsbError::WouldBlock)
+        } else {
+            Ok(())
         }
     }
 }
@@ -154,25 +139,12 @@ where
         self.inner.reset();
         self.read_buf.clear();
         self.write_buf.clear();
-        self.write_state = WriteState::Idle;
-    }
-
-    fn poll(&mut self) {
-        self.flush().ok();
+        self.need_zlp = false;
     }
 
     fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
-        if addr == self.inner.write_ep.address() {
-            match self.write_state {
-                WriteState::WriteFull => {
-                    self.write_state = WriteState::WriteShort;
-                    self.inner.write_packet(&[]).ok();
-                },
-                WriteState::WriteShort => {
-                    self.write_state = WriteState::Idle;
-                },
-                WriteState::Idle => { },
-            }
+        if addr == self.inner.write_ep_address() {
+            self.flush().ok();
         }
     }
 

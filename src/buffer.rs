@@ -87,13 +87,18 @@ impl<N: ArrayLength<u8>> Buffer<N> {
     }
 
     // Takes up to max_count bytes from the buffer and passes a slice pointing to them to a closure
-    // for reading. The closure's return value is passed through.
-    pub fn read<R>(&mut self, max_count: usize, f: impl FnOnce(&[u8]) -> R) -> R {
+    // for reading. The closure should return the number of bytes actually read and is allowed to
+    // read less than max_bytes. If the callback returns an error, the data is not discarded from
+    // the buffer.
+    pub fn read<E>(&mut self, max_count: usize, f: impl FnOnce(&[u8]) -> Result<usize, E>)
+        -> Result<usize, E>
+    {
         let count = cmp::min(max_count, self.available_read());
-        let result = f(&self.data[self.rpos..self.rpos+count]);
-        self.rpos += count;
 
-        result
+        f(&self.data[self.rpos..self.rpos+count]).map(|count| {
+            self.rpos += count;
+            count
+        })
     }
 
     fn discard_already_read_data(&mut self) {

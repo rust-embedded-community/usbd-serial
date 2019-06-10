@@ -39,7 +39,7 @@ pub struct CdcAcmClass<'a, B: UsbBus> {
     comm_ep: EndpointIn<'a, B>,
     data_if: InterfaceNumber,
     read_ep: EndpointOut<'a, B>,
-    pub(crate) write_ep: EndpointIn<'a, B>,
+    write_ep: EndpointIn<'a, B>,
     line_coding: LineCoding,
     dtr: bool,
     rts: bool,
@@ -96,6 +96,11 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
     /// Reads a single packet from the OUT endpoint.
     pub fn read_packet(&mut self, data: &mut [u8]) -> Result<usize> {
         self.read_ep.read(data)
+    }
+
+    /// Gets the address of the IN endpoint.
+    pub(crate) fn write_ep_address(&self) -> EndpointAddress {
+        self.write_ep.address()
     }
 }
 
