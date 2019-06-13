@@ -1,36 +1,58 @@
+use core::borrow::BorrowMut;
+use core::mem;
 use core::slice;
 use usb_device::class_prelude::*;
 use usb_device::Result;
-use generic_array::ArrayLength;
-use generic_array::typenum;
 use crate::cdc_acm::*;
-use crate::buffer::Buffer;
+use crate::buffer::{Buffer, DefaultBufferStore};
 
 /// USB (CDC-ACM) serial port with built-in buffering to implement stream-like behavior.
-pub struct SerialPort<'a, B, NRBUF=typenum::U128, NWBUF=typenum::U128>
+///
+/// The RS and WS type arguments specify the storage for the read/write buffers, respectively. By
+/// default an interna 128 byte buffer is used for both directions.
+pub struct SerialPort<'a, B, RS=DefaultBufferStore, WS=DefaultBufferStore>
 where
     B: UsbBus,
-    NRBUF: ArrayLength<u8>,
-    NWBUF: ArrayLength<u8>,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
 {
     inner: CdcAcmClass<'a, B>,
-    read_buf: Buffer<NRBUF>,
-    write_buf: Buffer<NWBUF>,
+    read_buf: Buffer<RS>,
+    write_buf: Buffer<WS>,
     need_zlp: bool,
 }
 
-impl<B, NRBUF, NWBUF> SerialPort<'_, B, NRBUF, NWBUF>
+impl<B> SerialPort<'_, B>
 where
-    B: UsbBus,
-    NRBUF: ArrayLength<u8>,
-    NWBUF: ArrayLength<u8>,
+    B: UsbBus
 {
-    /// Creates a new USB serial port with the provided UsbBus.
-    pub fn new(alloc: &UsbBusAllocator<B>) -> SerialPort<'_, B, NRBUF, NWBUF> {
+    /// Creates a new USB serial port with the provided UsbBus and 128 byte read/write buffers.
+    pub fn new(alloc: &UsbBusAllocator<B>)
+        -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore>
+    {
         SerialPort {
             inner: CdcAcmClass::new(alloc, 64),
-            write_buf: Buffer::new(),
-            read_buf: Buffer::new(),
+            read_buf: Buffer::new(unsafe { mem::uninitialized() }),
+            write_buf: Buffer::new(unsafe { mem::uninitialized() }),
+            need_zlp: false,
+        }
+    }
+}
+
+impl<B, RS, WS> SerialPort<'_, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    /// Creates a new USB serial port with the provided UsbBus and buffer backing stores.
+    pub fn new_with_store(alloc: &UsbBusAllocator<B>, read_store: RS, write_store: WS)
+        -> SerialPort<'_, B, RS, WS>
+    {
+        SerialPort {
+            inner: CdcAcmClass::new(alloc, 64),
+            read_buf: Buffer::new(read_store),
+            write_buf: Buffer::new(write_store),
             need_zlp: false,
         }
     }
@@ -125,11 +147,11 @@ where
     }
 }
 
-impl<B, NRBUF, NWBUF> UsbClass<B> for SerialPort<'_, B, NRBUF, NWBUF>
+impl<B, RS, WS> UsbClass<B> for SerialPort<'_, B, RS, WS>
 where
     B: UsbBus,
-    NRBUF: ArrayLength<u8>,
-    NWBUF: ArrayLength<u8>,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
 {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
         self.inner.get_configuration_descriptors(writer)
@@ -153,16 +175,16 @@ where
     fn control_out(&mut self, xfer: ControlOut<B>) { self.inner.control_out(xfer); }
 }
 
-impl<B, NRBUF, NWBUF> embedded_hal::serial::Write<u8> for SerialPort<'_, B, NRBUF, NWBUF>
+impl<B, RS, WS> embedded_hal::serial::Write<u8> for SerialPort<'_, B, RS, WS>
 where
     B: UsbBus,
-    NRBUF: ArrayLength<u8>,
-    NWBUF: ArrayLength<u8>,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
 {
     type Error = UsbError;
 
     fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
-        match <SerialPort<'_, B, NRBUF, NWBUF>>::write(self, slice::from_ref(&word)) {
+        match <SerialPort<'_, B, RS, WS>>::write(self, slice::from_ref(&word)) {
             Ok(0) | Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(()),
             Err(err) => Err(nb::Error::Other(err)),
@@ -170,7 +192,7 @@ where
     }
 
     fn flush(&mut self) -> nb::Result<(), Self::Error> {
-        match <SerialPort<'_, B, NRBUF, NWBUF>>::flush(self) {
+        match <SerialPort<'_, B, RS, WS>>::flush(self) {
             Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(()),
             Err(err) => Err(nb::Error::Other(err)),
@@ -178,18 +200,18 @@ where
     }
 }
 
-impl<B, NRBUF, NWBUF> embedded_hal::serial::Read<u8> for SerialPort<'_, B, NRBUF, NWBUF>
+impl<B, RS, WS> embedded_hal::serial::Read<u8> for SerialPort<'_, B, RS, WS>
 where
     B: UsbBus,
-    NRBUF: ArrayLength<u8>,
-    NWBUF: ArrayLength<u8>,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
 {
     type Error = UsbError;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
         let mut buf: u8 = 0;
 
-        match <SerialPort<'_, B, NRBUF, NWBUF>>::read(self, slice::from_mut(&mut buf)) {
+        match <SerialPort<'_, B, RS, WS>>::read(self, slice::from_mut(&mut buf)) {
             Ok(0) | Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(buf),
             Err(err) => Err(nb::Error::Other(err)),

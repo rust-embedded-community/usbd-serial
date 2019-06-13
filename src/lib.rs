@@ -7,3 +7,4 @@ mod serial_port;
 pub use usb_device::{Result, UsbError};
 pub use crate::cdc_acm::*;
 pub use crate::serial_port::*;
+pub use crate::buffer::DefaultBufferStore;

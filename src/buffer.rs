@@ -1,22 +1,22 @@
-use core::{cmp, mem, ptr};
-use generic_array::{ArrayLength, GenericArray};
+use core::{cmp, ptr};
+use core::borrow::{Borrow, BorrowMut};
 
-// An mediocre buffer that allows for block access without extra copies and memmoves more than
-// necessary.
-//
-// wpos points to the first byte that can be written rpos points at the next byte that can be read
-//
-// invariants: 0 <= rpos <= wpos <= data.len()
-pub struct Buffer<N: ArrayLength<u8>> {
-    data: GenericArray<u8, N>,
-    pub rpos: usize,
-    pub wpos: usize,
+/// A mediocre buffer that allows for block access without extra copies but memmoves more than
+/// necessary.
+///
+/// wpos points to the first byte that can be written rpos points at the next byte that can be read
+///
+/// invariants: 0 <= rpos <= wpos <= data.len()
+pub struct Buffer<S: BorrowMut<[u8]>> {
+    store: S,
+    rpos: usize,
+    wpos: usize,
 }
 
-impl<N: ArrayLength<u8>> Buffer<N> {
-    pub fn new() -> Self {
+impl<S: BorrowMut<[u8]>> Buffer<S> {
+    pub fn new(store: S) -> Self {
         Self {
-            data: unsafe { mem::uninitialized() },
+            store,
             rpos: 0,
             wpos: 0,
         }
@@ -39,7 +39,7 @@ impl<N: ArrayLength<u8>> Buffer<N> {
     }
 
     fn available_write_without_discard(&self) -> usize {
-        self.data.len() - self.wpos
+        self.store.borrow().len() - self.wpos
     }
 
     // Writes as much as possible of data to the buffer and returns the number of bytes written
@@ -55,7 +55,7 @@ impl<N: ArrayLength<u8>> Buffer<N> {
             return 0;
         }
 
-        &self.data[self.wpos..self.wpos+count].copy_from_slice(&data[..count]);
+        &self.store.borrow_mut()[self.wpos..self.wpos+count].copy_from_slice(&data[..count]);
 
         self.wpos += count;
         count
@@ -80,7 +80,7 @@ impl<N: ArrayLength<u8>> Buffer<N> {
 
         assert!(self.available_write_without_discard() >= max_count);
 
-        f(&mut self.data[self.wpos..self.wpos+max_count]).map(|count| {
+        f(&mut self.store.borrow_mut()[self.wpos..self.wpos+max_count]).map(|count| {
             self.wpos += count;
             count
         })
@@ -95,24 +95,40 @@ impl<N: ArrayLength<u8>> Buffer<N> {
     {
         let count = cmp::min(max_count, self.available_read());
 
-        f(&self.data[self.rpos..self.rpos+count]).map(|count| {
+        f(&self.store.borrow()[self.rpos..self.rpos+count]).map(|count| {
             self.rpos += count;
             count
         })
     }
 
     fn discard_already_read_data(&mut self) {
-        if self.rpos != self.data.len() {
+        let data = self.store.borrow_mut();
+        if self.rpos != data.len() {
             unsafe {
                 ptr::copy(
-                    &self.data[self.rpos] as *const u8,
-                    &mut self.data[0] as *mut u8,
+                    &data[self.rpos] as *const u8,
+                    &mut data[0] as *mut u8,
                     self.available_read());
             }
         }
 
         self.wpos -= self.rpos;
         self.rpos = 0;
+    }
+}
+
+/// Default backing store for the mediocre buffer
+pub struct DefaultBufferStore([u8; 128]);
+
+impl Borrow<[u8]> for DefaultBufferStore {
+    fn borrow(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl BorrowMut<[u8]> for DefaultBufferStore {
+    fn borrow_mut(&mut self) -> &mut [u8] {
+        &mut self.0
     }
 }
 
