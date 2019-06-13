@@ -49,7 +49,7 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
             self.discard_already_read_data();
         }
 
-        let count = cmp::min(self.available_write(), data.len());
+        let count = cmp::min(self.available_write_without_discard(), data.len());
         if count == 0 {
             // Buffer is full (or data is empty)
             return 0;
