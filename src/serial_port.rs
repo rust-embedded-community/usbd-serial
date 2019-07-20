@@ -19,7 +19,20 @@ where
     inner: CdcAcmClass<'a, B>,
     read_buf: Buffer<RS>,
     write_buf: Buffer<WS>,
-    need_zlp: bool,
+    write_state: WriteState,
+}
+
+enum WriteState {
+    /// No packets in-flight
+    Idle,
+
+    /// Short packet currently in-flight
+    Short,
+
+    /// Full packet current in-flight. A full packet must be followed by a short packet for the host
+    /// OS to see the transaction. The data is the number of subsequent full packets sent so far. A
+    /// short packet is forced every once in a while so that the OS sees data in a timely fashion.
+    Full(usize),
 }
 
 impl<B> SerialPort<'_, B>
@@ -30,12 +43,10 @@ where
     pub fn new(alloc: &UsbBusAllocator<B>)
         -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore>
     {
-        SerialPort {
-            inner: CdcAcmClass::new(alloc, 64),
-            read_buf: Buffer::new(unsafe { mem::uninitialized() }),
-            write_buf: Buffer::new(unsafe { mem::uninitialized() }),
-            need_zlp: false,
-        }
+        self.new_with_store(
+            alloc,
+            unsafe { mem::uninitialized() },
+            unsafe { mem::uninitialized() })
     }
 }
 
@@ -68,21 +79,14 @@ where
 
     /// Writes bytes from `data` into the port and returns the number of bytes written.
     pub fn write(&mut self, data: &[u8]) -> Result<usize> {
-        if self.write_buf.available_write() == 0 {
-            // Buffer is full, try to flush
+        let count = self.write_buf.write(data);
 
-            match self.flush() {
-                Ok(_) | Err(UsbError::WouldBlock) => { },
-                Err(err) => { return Err(err); },
-            };
+        match self.flush() {
+            Ok(_) | Err(UsbError::WouldBlock) => { },
+            Err(err) => { return Err(err); },
+        };
 
-            if self.write_buf.available_write() == 0 {
-                // Still full, can't write anything.
-                return Ok(0);
-            }
-        }
-
-        Ok(self.write_buf.write(data))
+        return Ok(count);
     }
 
     /// Reads bytes from the port into `data` and returns the number of bytes read.
@@ -121,7 +125,7 @@ where
     pub fn flush(&mut self) -> Result<()> {
         let buf = &mut self.write_buf;
         let inner = &mut self.inner;
-        let need_zlp = &mut self.need_zlp;
+        let write_state = &mut self.write_state;
 
         if buf.available_read() > 0 {
             buf.read(inner.max_packet_size() as usize, |buf_data| {
@@ -161,7 +165,7 @@ where
         self.inner.reset();
         self.read_buf.clear();
         self.write_buf.clear();
-        self.need_zlp = false;
+        self.write_state = WriteState::Idle;
     }
 
     fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
