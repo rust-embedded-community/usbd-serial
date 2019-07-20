@@ -182,6 +182,8 @@ where
         } else {
             // No data left in writer_buf or platform buffers.
 
+            *write_state = WriteState::Idle;
+
             Ok(())
         }
     }
