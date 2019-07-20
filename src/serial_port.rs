@@ -19,7 +19,27 @@ where
     inner: CdcAcmClass<'a, B>,
     read_buf: Buffer<RS>,
     write_buf: Buffer<WS>,
-    need_zlp: bool,
+    in_flight: usize,
+    write_state: WriteState,
+}
+
+/// If this many full size packets have been sent in a row, a short packet will be sent so that the
+/// host sees the data in a timely manner.
+const SHORT_PACKET_INTERVAL: usize = 10;
+
+/// Keeps track of the type of the last written packet.
+enum WriteState {
+    /// No packets in-flight
+    Idle,
+
+    /// Short packet currently in-flight
+    Short,
+
+    /// Full packet current in-flight. A full packet must be followed by a short packet for the host
+    /// OS to see the transaction. The data is the number of subsequent full packets sent so far. A
+    /// short packet is forced every SHORT_PACKET_INTERVAL packets so that the OS sees data in a
+    /// timely manner.
+    Full(usize),
 }
 
 impl<B> SerialPort<'_, B>
@@ -30,12 +50,10 @@ where
     pub fn new(alloc: &UsbBusAllocator<B>)
         -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore>
     {
-        SerialPort {
-            inner: CdcAcmClass::new(alloc, 64),
-            read_buf: Buffer::new(unsafe { mem::uninitialized() }),
-            write_buf: Buffer::new(unsafe { mem::uninitialized() }),
-            need_zlp: false,
-        }
+        SerialPort::new_with_store(
+            alloc,
+            unsafe { mem::uninitialized() },
+            unsafe { mem::uninitialized() })
     }
 }
 
@@ -53,7 +71,8 @@ where
             inner: CdcAcmClass::new(alloc, 64),
             read_buf: Buffer::new(read_store),
             write_buf: Buffer::new(write_store),
-            need_zlp: false,
+            in_flight: 0,
+            write_state: WriteState::Idle,
         }
     }
 
@@ -68,21 +87,14 @@ where
 
     /// Writes bytes from `data` into the port and returns the number of bytes written.
     pub fn write(&mut self, data: &[u8]) -> Result<usize> {
-        if self.write_buf.available_write() == 0 {
-            // Buffer is full, try to flush
+        let count = self.write_buf.write(data);
 
-            match self.flush() {
-                Ok(_) | Err(UsbError::WouldBlock) => { },
-                Err(err) => { return Err(err); },
-            };
+        match self.flush() {
+            Ok(_) | Err(UsbError::WouldBlock) => { },
+            Err(err) => { return Err(err); },
+        };
 
-            if self.write_buf.available_write() == 0 {
-                // Still full, can't write anything.
-                return Ok(0);
-            }
-        }
-
-        Ok(self.write_buf.write(data))
+        return Ok(count);
     }
 
     /// Reads bytes from the port into `data` and returns the number of bytes read.
@@ -115,33 +127,61 @@ where
         r
     }
 
-    /// Sends as much as possible of the current write buffer. Returns `Ok` if the write buffer has
-    /// been completely transferred to and acknowledged by the host, `Err(WouldBlock)` if there is
-    /// still unacknowledged data, and other errors if there's an error sending data to the host.
+    /// Sends as much as possible of the current write buffer. Returns `Ok` if all data that has
+    /// been written has been completely transferred to and acknowledged by the host,
+    /// `Err(WouldBlock)` if there is still data remaining, and other errors if there's an error
+    /// sending data to the host.
     pub fn flush(&mut self) -> Result<()> {
         let buf = &mut self.write_buf;
         let inner = &mut self.inner;
-        let need_zlp = &mut self.need_zlp;
+        let in_flight = &mut self.in_flight;
+        let write_state = &mut self.write_state;
+
+        let full_count = match *write_state {
+            WriteState::Full(c) => c,
+            _ => 0,
+        };
 
         if buf.available_read() > 0 {
-            buf.read(inner.max_packet_size() as usize, |buf_data| {
+            // There's data in the write_buf, so try to write that first.
+
+            let max_write_size = if full_count >= SHORT_PACKET_INTERVAL {
+                inner.max_packet_size() - 1
+            } else {
+                inner.max_packet_size()
+            } as usize;
+
+            buf.read(max_write_size, |buf_data| {
+                // This may return WouldBlock which will be propagated.
                 inner.write_packet(buf_data)?;
 
-                *need_zlp = (buf_data.len() == inner.max_packet_size() as usize);
+                *in_flight += 1;
+                *write_state = if buf_data.len() == inner.max_packet_size() as usize {
+                    WriteState::Full(full_count + 1)
+                } else {
+                    WriteState::Short
+                };
 
                 Ok(buf_data.len())
             })?;
 
             Err(UsbError::WouldBlock)
-        } else if *need_zlp {
+        } else if full_count != 0 {
             // Write a ZLP to complete the transaction if there's nothing else to write and the last
-            // packet was a full one.
+            // packet was a full one. This may return WouldBlock which will be propagated.
             inner.write_packet(&[])?;
 
-            *need_zlp = false;
+            *in_flight += 1;
+            *write_state = WriteState::Short;
+
+            Err(UsbError::WouldBlock)
+        } else if self.in_flight > 0 {
+            // There are still outgoing packets in the platform buffers.
 
             Err(UsbError::WouldBlock)
         } else {
+            // No data left in writer_buf or platform buffers.
+
             Ok(())
         }
     }
@@ -161,11 +201,12 @@ where
         self.inner.reset();
         self.read_buf.clear();
         self.write_buf.clear();
-        self.need_zlp = false;
+        self.write_state = WriteState::Idle;
     }
 
     fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
         if addr == self.inner.write_ep_address() {
+            self.in_flight -= 1;
             self.flush().ok();
         }
     }
