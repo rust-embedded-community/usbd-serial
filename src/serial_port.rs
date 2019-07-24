@@ -19,7 +19,6 @@ where
     inner: CdcAcmClass<'a, B>,
     read_buf: Buffer<RS>,
     write_buf: Buffer<WS>,
-    in_flight: usize,
     write_state: WriteState,
 }
 
@@ -71,7 +70,6 @@ where
             inner: CdcAcmClass::new(alloc, 64),
             read_buf: Buffer::new(read_store),
             write_buf: Buffer::new(write_store),
-            in_flight: 0,
             write_state: WriteState::Idle,
         }
     }
@@ -134,7 +132,6 @@ where
     pub fn flush(&mut self) -> Result<()> {
         let buf = &mut self.write_buf;
         let inner = &mut self.inner;
-        let in_flight = &mut self.in_flight;
         let write_state = &mut self.write_state;
 
         let full_count = match *write_state {
@@ -155,7 +152,6 @@ where
                 // This may return WouldBlock which will be propagated.
                 inner.write_packet(buf_data)?;
 
-                *in_flight += 1;
                 *write_state = if buf_data.len() == inner.max_packet_size() as usize {
                     WriteState::Full(full_count + 1)
                 } else {
@@ -171,16 +167,11 @@ where
             // packet was a full one. This may return WouldBlock which will be propagated.
             inner.write_packet(&[])?;
 
-            *in_flight += 1;
             *write_state = WriteState::Short;
 
             Err(UsbError::WouldBlock)
-        } else if self.in_flight > 0 {
-            // There are still outgoing packets in the platform buffers.
-
-            Err(UsbError::WouldBlock)
         } else {
-            // No data left in writer_buf or platform buffers.
+            // No data left in writer_buf.
 
             *write_state = WriteState::Idle;
 
@@ -208,7 +199,6 @@ where
 
     fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
         if addr == self.inner.write_ep_address() {
-            self.in_flight -= 1;
             self.flush().ok();
         }
     }
