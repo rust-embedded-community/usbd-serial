@@ -83,8 +83,14 @@ where
     /// Gets the RTS (ready to send) state
     pub fn rts(&self) -> bool { self.inner.rts() }
 
-    /// Writes bytes from `data` into the port and returns the number of bytes written. Returns 0 if
-    /// no bytes could be written.
+    /// Writes bytes from `data` into the port and returns the number of bytes written.
+    ///
+    /// # Errors
+    ///
+    /// * [`WouldBlock`](usb_device::UsbError::WouldBlock) - No bytes could be written because the
+    ///   buffers are full.
+    ///
+    /// Other errors from `usb-device` may also be propagated.
     pub fn write(&mut self, data: &[u8]) -> Result<usize> {
         let count = self.write_buf.write(data);
 
@@ -93,11 +99,20 @@ where
             Err(err) => { return Err(err); },
         };
 
-        return Ok(count);
+        if count == 0 {
+            Err(UsbError::WouldBlock)
+        } else {
+            Ok(count)
+        }
     }
 
-    /// Reads bytes from the port into `data` and returns the number of bytes read. Returns 0 if
-    /// there is no data to be read at the moment.
+    /// Reads bytes from the port into `data` and returns the number of bytes read.
+    ///
+    /// # Errors
+    ///
+    /// * [`WouldBlock`](usb_device::UsbError::WouldBlock) - No bytes available for reading.
+    ///
+    /// Other errors from `usb-device` may also be propagated.
     pub fn read(&mut self, data: &mut [u8]) -> Result<usize> {
         let buf = &mut self.read_buf;
         let inner = &mut self.inner;
@@ -115,7 +130,7 @@ where
 
         if buf.available_read() == 0 {
             // No data available for reading.
-            return Ok(0);
+            return Err(UsbError::WouldBlock);
         }
 
         let r = buf.read(data.len(), |buf_data| {

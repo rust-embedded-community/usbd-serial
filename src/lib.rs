@@ -30,18 +30,17 @@
 //!
 //!     match serial.read(&mut buf[..]) {
 //!         Ok(count) => {
-//!             if count > 0 {
-//!                 // Received data is in &buf[..count]
-//!             }
+//!             // count bytes were read to &buf[..count]
 //!         },
+//!         Err(UsbError::WouldBlock) => // No data received
 //!         Err(err) => // An error occurred
 //!     };
 //!
 //!     match serial.write(&[0x3a, 0x29]) {
 //!         Ok(count) => {
-//!             // count bytes were written (may be 0)
+//!             // count bytes were written
 //!         },
-//!         //Err(UsbError::WouldBlock) => { },
+//!         Err(UsbError::WouldBlock) => // No data could be written (buffers full)
 //!         Err(err) => // An error occurred
 //!     };
 //! }
