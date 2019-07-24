@@ -3,7 +3,9 @@ use core::mem;
 use usb_device::class_prelude::*;
 use usb_device::Result;
 
+/// This should be used as `device_class` when building the `UsbDevice`.
 pub const USB_CLASS_CDC: u8 = 0x02;
+
 const USB_CLASS_CDC_DATA: u8 = 0x0a;
 const CDC_SUBCLASS_ACM: u8 = 0x02;
 const CDC_PROTOCOL_NONE: u8 = 0x00;
@@ -21,10 +23,11 @@ const REQ_SET_LINE_CODING: u8 = 0x20;
 const REQ_GET_LINE_CODING: u8 = 0x21;
 const REQ_SET_CONTROL_LINE_STATE: u8 = 0x22;
 
-/// Packet level implementation of a CDC-ACM serial port. This class can be used directly and it has
-/// the least overhead due to directly reading and writing USB packets with no intermediate buffers,
-/// but it will not act like a stream-like serial port. The following constraints must be followed
-/// if you use this class directly:
+/// Packet level implementation of a CDC-ACM serial port.
+///
+/// This class can be used directly and it has the least overhead due to directly reading and
+/// writing USB packets with no intermediate buffers, but it will not act like a stream-like serial
+/// port. The following constraints must be followed if you use this class directly:
 ///
 /// - `read_packet` must be called with a buffer large enough to hold max_packet_size bytes, and the
 ///   method will return a `WouldBlock` error if there is no packet to be read.
@@ -247,6 +250,7 @@ impl From<u8> for StopBits {
     }
 }
 
+/// Parity for LineCoding
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ParityType {
     None = 0,
@@ -266,6 +270,10 @@ impl From<u8> for ParityType {
     }
 }
 
+/// Line coding parameters
+///
+/// This is provided by the host for specifying the standard UART parameters such as baud rate. Can
+/// be ignored if you don't plan to interface with a physical UART.
 pub struct LineCoding {
     stop_bits: StopBits,
     data_bits: u8,

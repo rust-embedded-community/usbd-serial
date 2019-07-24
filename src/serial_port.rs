@@ -9,7 +9,7 @@ use crate::buffer::{Buffer, DefaultBufferStore};
 /// USB (CDC-ACM) serial port with built-in buffering to implement stream-like behavior.
 ///
 /// The RS and WS type arguments specify the storage for the read/write buffers, respectively. By
-/// default an interna 128 byte buffer is used for both directions.
+/// default an internal 128 byte buffer is used for both directions.
 pub struct SerialPort<'a, B, RS=DefaultBufferStore, WS=DefaultBufferStore>
 where
     B: UsbBus,
@@ -83,7 +83,8 @@ where
     /// Gets the RTS (ready to send) state
     pub fn rts(&self) -> bool { self.inner.rts() }
 
-    /// Writes bytes from `data` into the port and returns the number of bytes written.
+    /// Writes bytes from `data` into the port and returns the number of bytes written. Returns 0 if
+    /// no bytes could be written.
     pub fn write(&mut self, data: &[u8]) -> Result<usize> {
         let count = self.write_buf.write(data);
 
@@ -95,7 +96,8 @@ where
         return Ok(count);
     }
 
-    /// Reads bytes from the port into `data` and returns the number of bytes read.
+    /// Reads bytes from the port into `data` and returns the number of bytes read. Returns 0 if
+    /// there is no data to be read at the moment.
     pub fn read(&mut self, data: &mut [u8]) -> Result<usize> {
         let buf = &mut self.read_buf;
         let inner = &mut self.inner;
@@ -126,9 +128,9 @@ where
     }
 
     /// Sends as much as possible of the current write buffer. Returns `Ok` if all data that has
-    /// been written has been completely transferred to and acknowledged by the host,
-    /// `Err(WouldBlock)` if there is still data remaining, and other errors if there's an error
-    /// sending data to the host.
+    /// been written has been completely written to hardware buffers `Err(WouldBlock)` if there is
+    /// still data remaining, and other errors if there's an error sending data to the host. Note
+    /// that even if this method returns `Ok`, data may still be in hardware buffers on either side.
     pub fn flush(&mut self) -> Result<()> {
         let buf = &mut self.write_buf;
         let inner = &mut self.inner;
