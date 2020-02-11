@@ -10,13 +10,13 @@ use crate::buffer::{Buffer, DefaultBufferStore};
 ///
 /// The RS and WS type arguments specify the storage for the read/write buffers, respectively. By
 /// default an internal 128 byte buffer is used for both directions.
-pub struct SerialPort<'a, B, RS=DefaultBufferStore, WS=DefaultBufferStore>
+pub struct SerialPort<B, RS=DefaultBufferStore, WS=DefaultBufferStore>
 where
     B: UsbBus,
     RS: BorrowMut<[u8]>,
     WS: BorrowMut<[u8]>,
 {
-    inner: CdcAcmClass<'a, B>,
+    inner: CdcAcmClass<B>,
     read_buf: Buffer<RS>,
     write_buf: Buffer<WS>,
     write_state: WriteState,
@@ -41,13 +41,12 @@ enum WriteState {
     Full(usize),
 }
 
-impl<B> SerialPort<'_, B>
+impl<B> SerialPort<B>
 where
     B: UsbBus
 {
     /// Creates a new USB serial port with the provided UsbBus and 128 byte read/write buffers.
-    pub fn new(alloc: &UsbBusAllocator<B>)
-        -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore>
+    pub fn new(alloc: &mut UsbAllocator<B>) -> SerialPort<B, DefaultBufferStore, DefaultBufferStore>
     {
         SerialPort::new_with_store(
             alloc,
@@ -56,15 +55,15 @@ where
     }
 }
 
-impl<B, RS, WS> SerialPort<'_, B, RS, WS>
+impl<B, RS, WS> SerialPort<B, RS, WS>
 where
     B: UsbBus,
     RS: BorrowMut<[u8]>,
     WS: BorrowMut<[u8]>,
 {
     /// Creates a new USB serial port with the provided UsbBus and buffer backing stores.
-    pub fn new_with_store(alloc: &UsbBusAllocator<B>, read_store: RS, write_store: WS)
-        -> SerialPort<'_, B, RS, WS>
+    pub fn new_with_store(alloc: &mut UsbAllocator<B>, read_store: RS, write_store: WS)
+        -> SerialPort<B, RS, WS>
     {
         SerialPort {
             inner: CdcAcmClass::new(alloc, 64),
@@ -197,7 +196,7 @@ where
     }
 }
 
-impl<B, RS, WS> UsbClass<B> for SerialPort<'_, B, RS, WS>
+impl<B, RS, WS> UsbClass<B> for SerialPort<B, RS, WS>
 where
     B: UsbBus,
     RS: BorrowMut<[u8]>,
@@ -205,6 +204,10 @@ where
 {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
         self.inner.get_configuration_descriptors(writer)
+    }
+
+    fn configure(&mut self) {
+        self.inner.configure();
     }
 
     fn reset(&mut self) {
@@ -225,7 +228,7 @@ where
     fn control_out(&mut self, xfer: ControlOut<B>) { self.inner.control_out(xfer); }
 }
 
-impl<B, RS, WS> embedded_hal::serial::Write<u8> for SerialPort<'_, B, RS, WS>
+impl<B, RS, WS> embedded_hal::serial::Write<u8> for SerialPort<B, RS, WS>
 where
     B: UsbBus,
     RS: BorrowMut<[u8]>,
@@ -234,7 +237,7 @@ where
     type Error = UsbError;
 
     fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
-        match <SerialPort<'_, B, RS, WS>>::write(self, slice::from_ref(&word)) {
+        match <SerialPort<B, RS, WS>>::write(self, slice::from_ref(&word)) {
             Ok(0) | Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(()),
             Err(err) => Err(nb::Error::Other(err)),
@@ -242,7 +245,7 @@ where
     }
 
     fn flush(&mut self) -> nb::Result<(), Self::Error> {
-        match <SerialPort<'_, B, RS, WS>>::flush(self) {
+        match <SerialPort<B, RS, WS>>::flush(self) {
             Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(()),
             Err(err) => Err(nb::Error::Other(err)),
@@ -250,7 +253,7 @@ where
     }
 }
 
-impl<B, RS, WS> embedded_hal::serial::Read<u8> for SerialPort<'_, B, RS, WS>
+impl<B, RS, WS> embedded_hal::serial::Read<u8> for SerialPort<B, RS, WS>
 where
     B: UsbBus,
     RS: BorrowMut<[u8]>,
@@ -261,7 +264,7 @@ where
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
         let mut buf: u8 = 0;
 
-        match <SerialPort<'_, B, RS, WS>>::read(self, slice::from_mut(&mut buf)) {
+        match <SerialPort<B, RS, WS>>::read(self, slice::from_mut(&mut buf)) {
             Ok(0) | Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(buf),
             Err(err) => Err(nb::Error::Other(err)),

@@ -12,4 +12,8 @@ repository = "https://github.com/mvirkkunen/usbd-serial"
 [dependencies]
 embedded-hal = "0.2.2"
 nb = "0.1.2"
-usb-device = "0.2.1"
+#usb-device = "0.2.1"
+
+[dependencies.usb-device]
+git = "https://github.com/mvirkkunen/usb-device"
+rev = "327c7d08c8483c7e36306b5b9672083f5ca9317f"

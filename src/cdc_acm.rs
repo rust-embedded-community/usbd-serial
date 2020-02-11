@@ -37,27 +37,27 @@ const REQ_SET_CONTROL_LINE_STATE: u8 = 0x22;
 ///   host operating system until a subsequent shorter packet is sent. A zero-length packet (ZLP)
 ///   can be sent if there is no other data to send. This is because USB bulk transactions must be
 ///   terminated with a short packet, even if the bulk endpoint is used for stream-like data.
-pub struct CdcAcmClass<'a, B: UsbBus> {
+pub struct CdcAcmClass<B: UsbBus> {
     comm_if: InterfaceNumber,
-    comm_ep: EndpointIn<'a, B>,
+    comm_ep: B::EndpointIn,
     data_if: InterfaceNumber,
-    read_ep: EndpointOut<'a, B>,
-    write_ep: EndpointIn<'a, B>,
+    read_ep: B::EndpointOut,
+    write_ep: B::EndpointIn,
     line_coding: LineCoding,
     dtr: bool,
     rts: bool,
 }
 
-impl<B: UsbBus> CdcAcmClass<'_, B> {
+impl<B: UsbBus> CdcAcmClass<B> {
     /// Creates a new CdcAcmClass with the provided UsbBus and max_packet_size in bytes. For
     /// full-speed devices, max_packet_size has to be one of 8, 16, 32 or 64.
-    pub fn new(alloc: &UsbBusAllocator<B>, max_packet_size: u16) -> CdcAcmClass<'_, B> {
+    pub fn new(alloc: &mut UsbAllocator<B>, max_packet_size: u16) -> CdcAcmClass<B> {
         CdcAcmClass {
             comm_if: alloc.interface(),
-            comm_ep: alloc.interrupt(8, 255),
+            comm_ep: alloc.endpoint_in(EndpointConfig::interrupt(8, 255)),
             data_if: alloc.interface(),
-            read_ep: alloc.bulk(max_packet_size),
-            write_ep: alloc.bulk(max_packet_size),
+            read_ep: alloc.endpoint_out(EndpointConfig::bulk(max_packet_size)),
+            write_ep: alloc.endpoint_in(EndpointConfig::bulk(max_packet_size)),
             line_coding: LineCoding {
                 stop_bits: StopBits::One,
                 data_bits: 8,
@@ -92,7 +92,7 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
     }
 
     /// Writes a single packet into the IN endpoint.
-    pub fn write_packet(&mut self, data: &[u8]) -> Result<usize> {
+    pub fn write_packet(&mut self, data: &[u8]) -> Result<()> {
         self.write_ep.write(data)
     }
 
@@ -107,10 +107,11 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
     }
 }
 
-impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
+impl<B: UsbBus> UsbClass<B> for CdcAcmClass<B> {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
         writer.interface(
             self.comm_if,
+            0,
             USB_CLASS_CDC,
             CDC_SUBCLASS_ACM,
             CDC_PROTOCOL_NONE)?;
@@ -149,6 +150,7 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
 
         writer.interface(
             self.data_if,
+            0,
             USB_CLASS_CDC_DATA,
             0x00,
             0x00)?;
@@ -157,6 +159,12 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
         writer.endpoint(&self.read_ep)?;
 
         Ok(())
+    }
+
+    fn configure(&mut self) {
+        self.comm_ep.enable();
+        self.read_ep.enable();
+        self.write_ep.enable();
     }
 
     fn reset(&mut self) {
