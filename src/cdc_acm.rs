@@ -37,27 +37,27 @@ const REQ_SET_CONTROL_LINE_STATE: u8 = 0x22;
 ///   host operating system until a subsequent shorter packet is sent. A zero-length packet (ZLP)
 ///   can be sent if there is no other data to send. This is because USB bulk transactions must be
 ///   terminated with a short packet, even if the bulk endpoint is used for stream-like data.
-pub struct CdcAcmClass<B: UsbBus> {
-    comm_if: InterfaceNumber,
-    comm_ep: B::EndpointIn,
-    data_if: InterfaceNumber,
-    read_ep: B::EndpointOut,
-    write_ep: B::EndpointIn,
+pub struct CdcAcmClass<U: UsbCore> {
+    comm_if: InterfaceHandle,
+    comm_ep: EndpointIn<U>,
+    data_if: InterfaceHandle,
+    read_ep: EndpointOut<U>,
+    write_ep: EndpointIn<U>,
     line_coding: LineCoding,
     dtr: bool,
     rts: bool,
 }
 
-impl<B: UsbBus> CdcAcmClass<B> {
+impl<U: UsbCore> CdcAcmClass<U> {
     /// Creates a new CdcAcmClass with the provided UsbBus and max_packet_size in bytes. For
     /// full-speed devices, max_packet_size has to be one of 8, 16, 32 or 64.
-    pub fn new(alloc: &mut UsbAllocator<B>, max_packet_size: u16) -> CdcAcmClass<B> {
+    pub fn new(max_packet_size: u16) -> CdcAcmClass<U> {
         CdcAcmClass {
-            comm_if: alloc.interface(),
-            comm_ep: alloc.endpoint_in(EndpointConfig::interrupt(8, 255)),
-            data_if: alloc.interface(),
-            read_ep: alloc.endpoint_out(EndpointConfig::bulk(max_packet_size)),
-            write_ep: alloc.endpoint_in(EndpointConfig::bulk(max_packet_size)),
+            comm_if: InterfaceHandle::new(),
+            comm_ep: EndpointConfig::interrupt(8, 255).into(),
+            data_if: InterfaceHandle::new(),
+            read_ep: EndpointConfig::bulk(max_packet_size).into(),
+            write_ep: EndpointConfig::bulk(max_packet_size).into(),
             line_coding: LineCoding {
                 stop_bits: StopBits::One,
                 data_bits: 8,
@@ -85,7 +85,7 @@ impl<B: UsbBus> CdcAcmClass<B> {
     pub fn dtr(&self) -> bool {
         self.dtr
     }
-    
+
     /// Gets the RTS (ready to send) state
     pub fn rts(&self) -> bool {
         self.rts
@@ -93,78 +93,68 @@ impl<B: UsbBus> CdcAcmClass<B> {
 
     /// Writes a single packet into the IN endpoint.
     pub fn write_packet(&mut self, data: &[u8]) -> Result<()> {
-        self.write_ep.write(data)
+        self.write_ep.write_packet(data)
     }
 
     /// Reads a single packet from the OUT endpoint.
     pub fn read_packet(&mut self, data: &mut [u8]) -> Result<usize> {
-        self.read_ep.read(data)
+        self.read_ep.read_packet(data)
     }
 
     /// Gets the address of the IN endpoint.
-    pub(crate) fn write_ep_address(&self) -> EndpointAddress {
-        self.write_ep.address()
+    pub(crate) fn write_ep(&self) -> &EndpointIn<U> {
+        &self.write_ep
     }
 }
 
-impl<B: UsbBus> UsbClass<B> for CdcAcmClass<B> {
-    fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
-        writer.interface(
-            self.comm_if,
-            0,
-            USB_CLASS_CDC,
-            CDC_SUBCLASS_ACM,
-            CDC_PROTOCOL_NONE)?;
+impl<U: UsbCore> UsbClass<U> for CdcAcmClass<U> {
+    fn configure(&mut self, mut config: Config<U>) -> Result<()> {
+        config
+            .interface(
+                &mut self.comm_if,
+                InterfaceDescriptor::class(USB_CLASS_CDC).sub_class(CDC_SUBCLASS_ACM).protocol(CDC_PROTOCOL_NONE))?
 
-        writer.write(
-            CS_INTERFACE,
-            &[
-                CDC_TYPE_HEADER, // bDescriptorSubtype
-                0x10, 0x01 // bcdCDC (1.10)
-            ])?;
+            .descriptor(
+                CS_INTERFACE,
+                &[
+                    CDC_TYPE_HEADER, // bDescriptorSubtype
+                    0x10, 0x01 // bcdCDC (1.10)
+                ])?
 
-        writer.write(
-            CS_INTERFACE,
-            &[
-                CDC_TYPE_ACM, // bDescriptorSubtype
-                0x00 // bmCapabilities
-            ])?;
+            .descriptor(
+                CS_INTERFACE,
+                &[
+                    CDC_TYPE_ACM, // bDescriptorSubtype
+                    0x00 // bmCapabilities
+                ])?
 
-        writer.write(
-            CS_INTERFACE,
-            &[
-                CDC_TYPE_UNION, // bDescriptorSubtype
-                self.comm_if.into(), // bControlInterface
-                self.data_if.into() // bSubordinateInterface
-            ])?;
+            .descriptor(
+                CS_INTERFACE,
+                &[
+                    CDC_TYPE_UNION, // bDescriptorSubtype
+                    (&self.comm_if).into(), // bControlInterface
+                    (&self.data_if).into() // bSubordinateInterface
+                ])?
 
-        writer.write(
-            CS_INTERFACE,
-            &[
-                CDC_TYPE_CALL_MANAGEMENT, // bDescriptorSubtype
-                0x00, // bmCapabilities
-                self.data_if.into() // bDataInterface
-            ])?;
+            .descriptor(
+                CS_INTERFACE,
+                &[
+                    CDC_TYPE_CALL_MANAGEMENT, // bDescriptorSubtype
+                    0x00, // bmCapabilities
+                    (&self.data_if).into() // bDataInterface
+                ])?
 
-        writer.endpoint(&self.comm_ep)?;
+            .endpoint_in(&mut self.comm_ep)?;
 
-        writer.interface(
-            self.data_if,
-            0,
-            USB_CLASS_CDC_DATA,
-            0x00,
-            0x00)?;
+        config
+            .interface(
+                &mut self.data_if,
+                InterfaceDescriptor::class(USB_CLASS_CDC_DATA))?
 
-        writer.endpoint(&self.write_ep)?;
-        writer.endpoint(&self.read_ep)?;
+            .endpoint_in(&mut self.write_ep)?
+            .endpoint_out(&mut self.read_ep)?;
 
         Ok(())
-    }
-
-    fn configure(&mut self) {
-        self.comm_ep.enable();
-        self.read_ep.enable();
-        self.write_ep.enable();
     }
 
     fn reset(&mut self) {
@@ -173,12 +163,12 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<B> {
         self.rts = false;
     }
 
-    fn control_in(&mut self, xfer: ControlIn<B>) {
+    fn control_in(&mut self, xfer: ControlIn<U>) {
         let req = xfer.request();
 
         if !(req.request_type == control::RequestType::Class
             && req.recipient == control::Recipient::Interface
-            && req.index == u8::from(self.comm_if) as u16)
+            && req.index == self.comm_if)
         {
             return;
         }
@@ -199,15 +189,17 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<B> {
         }
     }
 
-    fn control_out(&mut self, xfer: ControlOut<B>) {
+    fn control_out(&mut self, xfer: ControlOut<U>) {
         let req = xfer.request();
 
         if !(req.request_type == control::RequestType::Class
             && req.recipient == control::Recipient::Interface
-            && req.index == u8::from(self.comm_if) as u16)
+            && req.index == self.comm_if)
         {
             return;
         }
+
+        let data = xfer.data();
 
         match req.request {
             REQ_SEND_ENCAPSULATED_COMMAND => {
@@ -215,14 +207,15 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<B> {
                 // compatibility.
                 xfer.accept().ok();
             },
-            REQ_SET_LINE_CODING if xfer.data().len() >= 7 => {
-                self.line_coding.data_rate =
-                    u32::from_le_bytes(xfer.data()[0..4].try_into().unwrap());
-                self.line_coding.stop_bits = xfer.data()[4].into();
-                self.line_coding.parity_type = xfer.data()[5].into();
-                self.line_coding.data_bits = xfer.data()[6];
+            REQ_SET_LINE_CODING if data.len() >= 7 => {
+                if let Ok(data_rate) = data[0..4].try_into() {
+                    self.line_coding.data_rate = u32::from_le_bytes(data_rate);
+                    self.line_coding.stop_bits = data[4].into();
+                    self.line_coding.parity_type = data[5].into();
+                    self.line_coding.data_bits = data[6];
 
-                xfer.accept().ok();
+                    xfer.accept().ok();
+                }
             },
             REQ_SET_CONTROL_LINE_STATE => {
                 self.dtr = (req.value & 0x0001) != 0;
@@ -231,7 +224,7 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<B> {
                 xfer.accept().ok();
             },
             _ => { xfer.reject().ok(); }
-        };  
+        };
     }
 }
 
