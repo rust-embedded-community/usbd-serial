@@ -1,6 +1,6 @@
 use core::convert::TryInto;
 use core::mem;
-use usb_device::class_prelude::*;
+use usb_device::class::*;
 use usb_device::Result;
 
 /// This should be used as `device_class` when building the `UsbDevice`.
@@ -72,7 +72,7 @@ impl<U: UsbCore> CdcAcmClass<U> {
     /// Gets the maximum packet size in bytes.
     pub fn max_packet_size(&self) -> u16 {
         // The size is the same for both endpoints.
-        self.read_ep.max_packet_size()
+        self.read_ep.config().max_packet_size()
     }
 
     /// Gets the current line coding. The line coding contains information that's mainly relevant
@@ -112,7 +112,8 @@ impl<U: UsbCore> UsbClass<U> for CdcAcmClass<U> {
         config
             .interface(
                 &mut self.comm_if,
-                InterfaceDescriptor::class(USB_CLASS_CDC).sub_class(CDC_SUBCLASS_ACM).protocol(CDC_PROTOCOL_NONE))?
+                InterfaceDescriptor::class(USB_CLASS_CDC)
+                    .sub_class(CDC_SUBCLASS_ACM).protocol(CDC_PROTOCOL_NONE))?
 
             .descriptor(
                 CS_INTERFACE,

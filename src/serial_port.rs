@@ -1,7 +1,7 @@
 use core::borrow::BorrowMut;
 use core::mem;
 use core::slice;
-use usb_device::class_prelude::*;
+use usb_device::class::*;
 use usb_device::Result;
 use crate::cdc_acm::*;
 use crate::buffer::{Buffer, DefaultBufferStore};
@@ -212,8 +212,8 @@ where
         self.write_state = WriteState::Idle;
     }
 
-    fn endpoint_in_complete(&mut self, eps: EndpointInSet) {
-        if eps.contains(&self.inner.write_ep()) {
+    fn poll(&mut self, event: &PollEvent) {
+        if event.has_completed(self.inner.write_ep()) {
             self.flush().ok();
         }
     }
