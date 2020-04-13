@@ -109,51 +109,57 @@ impl<U: UsbCore> CdcAcmClass<U> {
 
 impl<U: UsbCore> UsbClass<U> for CdcAcmClass<U> {
     fn configure(&mut self, mut config: Config<U>) -> Result<()> {
-        config
-            .interface(
-                &mut self.comm_if,
-                InterfaceDescriptor::class(USB_CLASS_CDC)
-                    .sub_class(CDC_SUBCLASS_ACM).protocol(CDC_PROTOCOL_NONE))?
+        const DESC: InterfaceDescriptor = InterfaceDescriptor::class(USB_CLASS_CDC)
+            .sub_class(CDC_SUBCLASS_ACM).protocol(CDC_PROTOCOL_NONE);
 
-            .descriptor(
-                CS_INTERFACE,
-                &[
-                    CDC_TYPE_HEADER, // bDescriptorSubtype
-                    0x10, 0x01 // bcdCDC (1.10)
-                ])?
+        {
+            let mut assoc = config.interface_association(DESC)?;
 
-            .descriptor(
-                CS_INTERFACE,
-                &[
-                    CDC_TYPE_ACM, // bDescriptorSubtype
-                    0x00 // bmCapabilities
-                ])?
+            assoc
+                .interface(
+                    &mut self.comm_if,
+                    DESC)?
 
-            .descriptor(
-                CS_INTERFACE,
-                &[
-                    CDC_TYPE_UNION, // bDescriptorSubtype
-                    (&self.comm_if).into(), // bControlInterface
-                    (&self.data_if).into() // bSubordinateInterface
-                ])?
+                .descriptor(
+                    CS_INTERFACE,
+                    &[
+                        CDC_TYPE_HEADER, // bDescriptorSubtype
+                        0x10, 0x01 // bcdCDC (1.10)
+                    ])?
 
-            .descriptor(
-                CS_INTERFACE,
-                &[
-                    CDC_TYPE_CALL_MANAGEMENT, // bDescriptorSubtype
-                    0x00, // bmCapabilities
-                    (&self.data_if).into() // bDataInterface
-                ])?
+                .descriptor(
+                    CS_INTERFACE,
+                    &[
+                        CDC_TYPE_ACM, // bDescriptorSubtype
+                        0x00 // bmCapabilities
+                    ])?
 
-            .endpoint_in(&mut self.comm_ep)?;
+                .descriptor(
+                    CS_INTERFACE,
+                    &[
+                        CDC_TYPE_UNION, // bDescriptorSubtype
+                        (&self.comm_if).into(), // bControlInterface
+                        (&self.data_if).into() // bSubordinateInterface
+                    ])?
 
-        config
-            .interface(
-                &mut self.data_if,
-                InterfaceDescriptor::class(USB_CLASS_CDC_DATA))?
+                .descriptor(
+                    CS_INTERFACE,
+                    &[
+                        CDC_TYPE_CALL_MANAGEMENT, // bDescriptorSubtype
+                        0x00, // bmCapabilities
+                        (&self.data_if).into() // bDataInterface
+                    ])?
 
-            .endpoint_in(&mut self.write_ep)?
-            .endpoint_out(&mut self.read_ep)?;
+                .endpoint_in(&mut self.comm_ep)?;
+
+            assoc
+                .interface(
+                    &mut self.data_if,
+                    InterfaceDescriptor::class(USB_CLASS_CDC_DATA))?
+
+                .endpoint_in(&mut self.write_ep)?
+                .endpoint_out(&mut self.read_ep)?;
+        }
 
         Ok(())
     }
