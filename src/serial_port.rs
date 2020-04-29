@@ -233,7 +233,7 @@ where
 {
     type Error = UsbError;
 
-    fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
+    fn try_write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
         match <SerialPort<'_, B, RS, WS>>::write(self, slice::from_ref(&word)) {
             Ok(0) | Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(()),
@@ -241,7 +241,7 @@ where
         }
     }
 
-    fn flush(&mut self) -> nb::Result<(), Self::Error> {
+    fn try_flush(&mut self) -> nb::Result<(), Self::Error> {
         match <SerialPort<'_, B, RS, WS>>::flush(self) {
             Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(()),
@@ -258,7 +258,7 @@ where
 {
     type Error = UsbError;
 
-    fn read(&mut self) -> nb::Result<u8, Self::Error> {
+    fn try_read(&mut self) -> nb::Result<u8, Self::Error> {
         let mut buf: u8 = 0;
 
         match <SerialPort<'_, B, RS, WS>>::read(self, slice::from_mut(&mut buf)) {
