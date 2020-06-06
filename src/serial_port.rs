@@ -80,7 +80,7 @@ where
     /// Gets the DTR (data terminal ready) state
     pub fn dtr(&self) -> bool { self.inner.dtr() }
 
-    /// Gets the RTS (ready to send) state
+    /// Gets the RTS (request to send) state
     pub fn rts(&self) -> bool { self.inner.rts() }
 
     /// Writes bytes from `data` into the port and returns the number of bytes written.

@@ -85,8 +85,8 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
     pub fn dtr(&self) -> bool {
         self.dtr
     }
-    
-    /// Gets the RTS (ready to send) state
+
+    /// Gets the RTS (request to send) state
     pub fn rts(&self) -> bool {
         self.rts
     }
