@@ -10,6 +10,7 @@ const USB_CLASS_CDC_DATA: u8 = 0x0a;
 const CDC_SUBCLASS_ACM: u8 = 0x02;
 const CDC_PROTOCOL_NONE: u8 = 0x00;
 
+const CS_INTERFACE_ASSOCIATION: u8 = 0x0B;
 const CS_INTERFACE: u8 = 0x24;
 const CDC_TYPE_HEADER: u8 = 0x00;
 const CDC_TYPE_CALL_MANAGEMENT: u8 = 0x01;
@@ -109,6 +110,19 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
 
 impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
+
+        // Windows will not work with a serial-port without an interface association descriptor.
+        writer.write(
+            CS_INTERFACE_ASSOCIATION,
+            &[
+                self.comm_if,   // first interface
+                2,              // number of interfaces
+                USB_CLASS_CDC,
+                CDC_SUBCLASS_ACM,
+                CDC_PROTOCOL_NONE,
+                0x00            // iFunction None
+            ])?;
+
         writer.interface(
             self.comm_if,
             USB_CLASS_CDC,
