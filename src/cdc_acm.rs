@@ -10,6 +10,7 @@ const USB_CLASS_CDC_DATA: u8 = 0x0a;
 const CDC_SUBCLASS_ACM: u8 = 0x02;
 const CDC_PROTOCOL_NONE: u8 = 0x00;
 
+const CS_INTERFACE_ASSOCIATION: u8 = 0x0B;
 const CS_INTERFACE: u8 = 0x24;
 const CDC_TYPE_HEADER: u8 = 0x00;
 const CDC_TYPE_CALL_MANAGEMENT: u8 = 0x01;
@@ -46,12 +47,13 @@ pub struct CdcAcmClass<'a, B: UsbBus> {
     line_coding: LineCoding,
     dtr: bool,
     rts: bool,
+    is_composite: bool,
 }
 
 impl<B: UsbBus> CdcAcmClass<'_, B> {
     /// Creates a new CdcAcmClass with the provided UsbBus and max_packet_size in bytes. For
     /// full-speed devices, max_packet_size has to be one of 8, 16, 32 or 64.
-    pub fn new(alloc: &UsbBusAllocator<B>, max_packet_size: u16) -> CdcAcmClass<'_, B> {
+    pub fn new(alloc: &UsbBusAllocator<B>, max_packet_size: u16, is_composite: bool) -> CdcAcmClass<'_, B> {
         CdcAcmClass {
             comm_if: alloc.interface(),
             comm_ep: alloc.interrupt(8, 255),
@@ -66,6 +68,7 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
             },
             dtr: false,
             rts: false,
+            is_composite: is_composite,
         }
     }
 
@@ -109,6 +112,21 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
 
 impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
+
+        // Windows will not work with a composite serial-port without an interface association descriptor.
+        if self.is_composite {
+            writer.write(
+                CS_INTERFACE_ASSOCIATION,
+                &[
+                    self.comm_if.into(),// first interface
+                    2,                  // number of interfaces
+                    USB_CLASS_CDC,
+                    CDC_SUBCLASS_ACM,
+                    CDC_PROTOCOL_NONE,
+                    0x00                // iFunction None
+                ])?;
+        }
+
         writer.interface(
             self.comm_if,
             USB_CLASS_CDC,

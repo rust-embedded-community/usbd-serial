@@ -54,6 +54,17 @@ where
             unsafe { mem::uninitialized() },
             unsafe { mem::uninitialized() })
     }
+
+    /// Same as new, but will add an IAD to configuration so serial port will work on Windows
+    /// when part of a composite device.
+    pub fn new_composite(alloc: &UsbBusAllocator<B>)
+        -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore>
+    {
+        SerialPort::new_composite_with_store(
+            alloc,
+            unsafe { mem::uninitialized() },
+            unsafe { mem::uninitialized() })
+    }
 }
 
 impl<B, RS, WS> SerialPort<'_, B, RS, WS>
@@ -67,7 +78,19 @@ where
         -> SerialPort<'_, B, RS, WS>
     {
         SerialPort {
-            inner: CdcAcmClass::new(alloc, 64),
+            inner: CdcAcmClass::new(alloc, 64, false),
+            read_buf: Buffer::new(read_store),
+            write_buf: Buffer::new(write_store),
+            write_state: WriteState::Idle,
+        }
+    }
+
+    /// Creates a new USB serial port with the provided UsbBus and buffer backing stores.
+    pub fn new_composite_with_store(alloc: &UsbBusAllocator<B>, read_store: RS, write_store: WS)
+        -> SerialPort<'_, B, RS, WS>
+    {
+        SerialPort {
+            inner: CdcAcmClass::new(alloc, 64, true),
             read_buf: Buffer::new(read_store),
             write_buf: Buffer::new(write_store),
             write_state: WriteState::Idle,
