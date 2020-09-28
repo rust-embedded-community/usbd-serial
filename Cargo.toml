@@ -13,3 +13,6 @@ repository = "https://github.com/mvirkkunen/usbd-serial"
 embedded-hal = "0.2.2"
 nb = "0.1.2"
 usb-device = "0.2.1"
+
+[patch.crates-io]
+usb-device = { git = "https://github.com/atykhyy/usb-device", rev = "ff5f9c7def93c5975ec5001f7b383fd427b6d0d6" }
