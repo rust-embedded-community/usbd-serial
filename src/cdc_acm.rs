@@ -109,6 +109,13 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
 
 impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
+        writer.iad(
+            self.comm_if,
+            2,
+            USB_CLASS_CDC,
+            CDC_SUBCLASS_ACM,
+            CDC_PROTOCOL_NONE)?;
+
         writer.interface(
             self.comm_if,
             USB_CLASS_CDC,
