@@ -66,8 +66,13 @@ where
     pub fn new_with_store(alloc: &UsbBusAllocator<B>, read_store: RS, write_store: WS)
         -> SerialPort<'_, B, RS, WS>
     {
+        #[cfg(not(feature = "high-speed"))]
+        let packet_size = 64;
+        #[cfg(feature = "high-speed")]
+        let packet_size = 512;
+
         SerialPort {
-            inner: CdcAcmClass::new(alloc, 64),
+            inner: CdcAcmClass::new(alloc, packet_size),
             read_buf: Buffer::new(read_store),
             write_buf: Buffer::new(write_store),
             write_state: WriteState::Idle,

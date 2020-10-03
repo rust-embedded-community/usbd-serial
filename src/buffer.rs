@@ -117,8 +117,13 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
     }
 }
 
+#[cfg(not(feature = "high-speed"))]
+const BUFFER_SIZE: usize = 128;
+#[cfg(feature = "high-speed")]
+const BUFFER_SIZE: usize = 1024;
+
 /// Default backing store for the mediocre buffer
-pub struct DefaultBufferStore([u8; 128]);
+pub struct DefaultBufferStore([u8; BUFFER_SIZE]);
 
 impl Borrow<[u8]> for DefaultBufferStore {
     fn borrow(&self) -> &[u8] {
