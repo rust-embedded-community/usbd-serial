@@ -1,4 +1,5 @@
 use core::borrow::BorrowMut;
+use core::fmt;
 use core::mem;
 use core::slice;
 use usb_device::class_prelude::*;
@@ -265,6 +266,21 @@ where
             Ok(0) | Err(UsbError::WouldBlock) => Err(nb::Error::WouldBlock),
             Ok(_) => Ok(buf),
             Err(err) => Err(nb::Error::Other(err)),
+        }
+    }
+}
+
+impl<B, RS, WS> fmt::Write for SerialPort<'_, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        match <SerialPort<'_, B, RS, WS>>::write(self, s.as_bytes()) {
+            Ok(0) | Err(UsbError::WouldBlock) => Err(fmt::Error),
+            Ok(_) => Ok(()),
+            Err(_err) => Err(fmt::Error),
         }
     }
 }
