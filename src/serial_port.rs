@@ -277,7 +277,7 @@ where
     WS: BorrowMut<[u8]>,
 {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        match <SerialPort<'_, B, RS, WS>>::write(self, s.as_bytes()) {
+        match self.write(s.as_bytes()) {
             Ok(0) | Err(UsbError::WouldBlock) => Err(fmt::Error),
             Ok(_) => Ok(()),
             Err(_err) => Err(fmt::Error),
