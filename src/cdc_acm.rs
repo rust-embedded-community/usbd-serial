@@ -102,8 +102,13 @@ impl<B: UsbBus> CdcAcmClass<'_, B> {
     }
 
     /// Gets the address of the IN endpoint.
-    pub(crate) fn write_ep_address(&self) -> EndpointAddress {
+    pub fn write_ep_address(&self) -> EndpointAddress {
         self.write_ep.address()
+    }
+
+    /// Gets the address of the OUT endpoint.
+    pub fn read_ep_address(&self) -> EndpointAddress {
+        self.read_ep.address()
     }
 }
 
@@ -114,51 +119,54 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
             2,
             USB_CLASS_CDC,
             CDC_SUBCLASS_ACM,
-            CDC_PROTOCOL_NONE)?;
+            CDC_PROTOCOL_NONE,
+        )?;
 
         writer.interface(
             self.comm_if,
             USB_CLASS_CDC,
             CDC_SUBCLASS_ACM,
-            CDC_PROTOCOL_NONE)?;
+            CDC_PROTOCOL_NONE,
+        )?;
 
         writer.write(
             CS_INTERFACE,
             &[
                 CDC_TYPE_HEADER, // bDescriptorSubtype
-                0x10, 0x01 // bcdCDC (1.10)
-            ])?;
+                0x10,
+                0x01, // bcdCDC (1.10)
+            ],
+        )?;
 
         writer.write(
             CS_INTERFACE,
             &[
                 CDC_TYPE_ACM, // bDescriptorSubtype
-                0x00 // bmCapabilities
-            ])?;
+                0x00,         // bmCapabilities
+            ],
+        )?;
 
         writer.write(
             CS_INTERFACE,
             &[
-                CDC_TYPE_UNION, // bDescriptorSubtype
+                CDC_TYPE_UNION,      // bDescriptorSubtype
                 self.comm_if.into(), // bControlInterface
-                self.data_if.into() // bSubordinateInterface
-            ])?;
+                self.data_if.into(), // bSubordinateInterface
+            ],
+        )?;
 
         writer.write(
             CS_INTERFACE,
             &[
                 CDC_TYPE_CALL_MANAGEMENT, // bDescriptorSubtype
-                0x00, // bmCapabilities
-                self.data_if.into() // bDataInterface
-            ])?;
+                0x00,                     // bmCapabilities
+                self.data_if.into(),      // bDataInterface
+            ],
+        )?;
 
         writer.endpoint(&self.comm_ep)?;
 
-        writer.interface(
-            self.data_if,
-            USB_CLASS_CDC_DATA,
-            0x00,
-            0x00)?;
+        writer.interface(self.data_if, USB_CLASS_CDC_DATA, 0x00, 0x00)?;
 
         writer.endpoint(&self.write_ep)?;
         writer.endpoint(&self.read_ep)?;
@@ -192,9 +200,12 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
                     data[6] = self.line_coding.data_bits;
 
                     Ok(7)
-                }).ok();
-            },
-            _ => { xfer.reject().ok(); },
+                })
+                .ok();
+            }
+            _ => {
+                xfer.reject().ok();
+            }
         }
     }
 
@@ -213,7 +224,7 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
                 // We don't actually support encapsulated commands but pretend we do for standards
                 // compatibility.
                 xfer.accept().ok();
-            },
+            }
             REQ_SET_LINE_CODING if xfer.data().len() >= 7 => {
                 self.line_coding.data_rate =
                     u32::from_le_bytes(xfer.data()[0..4].try_into().unwrap());
@@ -222,15 +233,17 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
                 self.line_coding.data_bits = xfer.data()[6];
 
                 xfer.accept().ok();
-            },
+            }
             REQ_SET_CONTROL_LINE_STATE => {
                 self.dtr = (req.value & 0x0001) != 0;
                 self.rts = (req.value & 0x0002) != 0;
 
                 xfer.accept().ok();
-            },
-            _ => { xfer.reject().ok(); }
-        };  
+            }
+            _ => {
+                xfer.reject().ok();
+            }
+        };
     }
 }
 
@@ -250,7 +263,7 @@ pub enum StopBits {
 impl From<u8> for StopBits {
     fn from(value: u8) -> Self {
         if value <= 2 {
-            unsafe { mem::transmute(value )}
+            unsafe { mem::transmute(value) }
         } else {
             StopBits::One
         }
@@ -270,7 +283,7 @@ pub enum ParityType {
 impl From<u8> for ParityType {
     fn from(value: u8) -> Self {
         if value <= 4 {
-            unsafe { mem::transmute(value )}
+            unsafe { mem::transmute(value) }
         } else {
             ParityType::None
         }
@@ -290,16 +303,24 @@ pub struct LineCoding {
 
 impl LineCoding {
     /// Gets the number of stop bits for UART communication.
-    pub fn stop_bits(&self) -> StopBits { self.stop_bits }
+    pub fn stop_bits(&self) -> StopBits {
+        self.stop_bits
+    }
 
     /// Gets the number of data bits for UART communication.
-    pub fn data_bits(&self) -> u8 { self.data_bits }
+    pub fn data_bits(&self) -> u8 {
+        self.data_bits
+    }
 
     /// Gets the parity type for UART communication.
-    pub fn parity_type(&self) -> ParityType { self.parity_type }
+    pub fn parity_type(&self) -> ParityType {
+        self.parity_type
+    }
 
     /// Gets the data rate in bits per second for UART communication.
-    pub fn data_rate(&self) -> u32 { self.data_rate }
+    pub fn data_rate(&self) -> u32 {
+        self.data_rate
+    }
 }
 
 impl Default for LineCoding {
