@@ -1,16 +1,16 @@
+use crate::buffer::{Buffer, DefaultBufferStore};
+use crate::cdc_acm::*;
 use core::borrow::BorrowMut;
 use core::mem;
 use core::slice;
 use usb_device::class_prelude::*;
 use usb_device::Result;
-use crate::cdc_acm::*;
-use crate::buffer::{Buffer, DefaultBufferStore};
 
 /// USB (CDC-ACM) serial port with built-in buffering to implement stream-like behavior.
 ///
 /// The RS and WS type arguments specify the storage for the read/write buffers, respectively. By
 /// default an internal 128 byte buffer is used for both directions.
-pub struct SerialPort<'a, B, RS=DefaultBufferStore, WS=DefaultBufferStore>
+pub struct SerialPort<'a, B, RS = DefaultBufferStore, WS = DefaultBufferStore>
 where
     B: UsbBus,
     RS: BorrowMut<[u8]>,
@@ -43,16 +43,15 @@ enum WriteState {
 
 impl<B> SerialPort<'_, B>
 where
-    B: UsbBus
+    B: UsbBus,
 {
     /// Creates a new USB serial port with the provided UsbBus and 128 byte read/write buffers.
-    pub fn new(alloc: &UsbBusAllocator<B>)
-        -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore>
-    {
-        SerialPort::new_with_store(
-            alloc,
-            unsafe { mem::uninitialized() },
-            unsafe { mem::uninitialized() })
+    pub fn new(
+        alloc: &UsbBusAllocator<B>,
+    ) -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore> {
+        SerialPort::new_with_store(alloc, unsafe { mem::uninitialized() }, unsafe {
+            mem::uninitialized()
+        })
     }
 }
 
@@ -63,9 +62,11 @@ where
     WS: BorrowMut<[u8]>,
 {
     /// Creates a new USB serial port with the provided UsbBus and buffer backing stores.
-    pub fn new_with_store(alloc: &UsbBusAllocator<B>, read_store: RS, write_store: WS)
-        -> SerialPort<'_, B, RS, WS>
-    {
+    pub fn new_with_store(
+        alloc: &UsbBusAllocator<B>,
+        read_store: RS,
+        write_store: WS,
+    ) -> SerialPort<'_, B, RS, WS> {
         SerialPort {
             inner: CdcAcmClass::new(alloc, 64),
             read_buf: Buffer::new(read_store),
@@ -75,13 +76,19 @@ where
     }
 
     /// Gets the current line coding.
-    pub fn line_coding(&self) -> &LineCoding { self.inner.line_coding() }
+    pub fn line_coding(&self) -> &LineCoding {
+        self.inner.line_coding()
+    }
 
     /// Gets the DTR (data terminal ready) state
-    pub fn dtr(&self) -> bool { self.inner.dtr() }
+    pub fn dtr(&self) -> bool {
+        self.inner.dtr()
+    }
 
     /// Gets the RTS (request to send) state
-    pub fn rts(&self) -> bool { self.inner.rts() }
+    pub fn rts(&self) -> bool {
+        self.inner.rts()
+    }
 
     /// Writes bytes from `data` into the port and returns the number of bytes written.
     ///
@@ -95,8 +102,10 @@ where
         let count = self.write_buf.write(data);
 
         match self.flush() {
-            Ok(_) | Err(UsbError::WouldBlock) => { },
-            Err(err) => { return Err(err); },
+            Ok(_) | Err(UsbError::WouldBlock) => {}
+            Err(err) => {
+                return Err(err);
+            }
         };
 
         if count == 0 {
@@ -220,9 +229,13 @@ where
         }
     }
 
-    fn control_in(&mut self, xfer: ControlIn<B>) { self.inner.control_in(xfer); }
+    fn control_in(&mut self, xfer: ControlIn<B>) {
+        self.inner.control_in(xfer);
+    }
 
-    fn control_out(&mut self, xfer: ControlOut<B>) { self.inner.control_out(xfer); }
+    fn control_out(&mut self, xfer: ControlOut<B>) {
+        self.inner.control_out(xfer);
+    }
 }
 
 impl<B, RS, WS> embedded_hal::serial::Write<u8> for SerialPort<'_, B, RS, WS>

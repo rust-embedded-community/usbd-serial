@@ -1,5 +1,5 @@
-use core::{cmp, ptr};
 use core::borrow::{Borrow, BorrowMut};
+use core::{cmp, ptr};
 
 /// A mediocre buffer that allows for block access without extra copies but memmoves more than
 /// necessary.
@@ -55,7 +55,7 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
             return 0;
         }
 
-        &self.store.borrow_mut()[self.wpos..self.wpos+count].copy_from_slice(&data[..count]);
+        &self.store.borrow_mut()[self.wpos..self.wpos + count].copy_from_slice(&data[..count]);
 
         self.wpos += count;
         count
@@ -65,9 +65,11 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
     // closure for writing. The closure should return the number of bytes actually written and is
     // allowed to write less than max_bytes. If the callback returns an error, any written data is
     // ignored.
-    pub fn write_all<E>(&mut self, max_count: usize, f: impl FnOnce(&mut [u8]) -> Result<usize, E>)
-        -> Result<usize, E>
-    {
+    pub fn write_all<E>(
+        &mut self,
+        max_count: usize,
+        f: impl FnOnce(&mut [u8]) -> Result<usize, E>,
+    ) -> Result<usize, E> {
         if max_count > self.available_write_without_discard() {
             // Data doesn't fit in currently available space
             if max_count > self.available_write() {
@@ -80,7 +82,7 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
 
         assert!(self.available_write_without_discard() >= max_count);
 
-        f(&mut self.store.borrow_mut()[self.wpos..self.wpos+max_count]).map(|count| {
+        f(&mut self.store.borrow_mut()[self.wpos..self.wpos + max_count]).map(|count| {
             self.wpos += count;
             count
         })
@@ -90,12 +92,14 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
     // for reading. The closure should return the number of bytes actually read and is allowed to
     // read less than max_bytes. If the callback returns an error, the data is not discarded from
     // the buffer.
-    pub fn read<E>(&mut self, max_count: usize, f: impl FnOnce(&[u8]) -> Result<usize, E>)
-        -> Result<usize, E>
-    {
+    pub fn read<E>(
+        &mut self,
+        max_count: usize,
+        f: impl FnOnce(&[u8]) -> Result<usize, E>,
+    ) -> Result<usize, E> {
         let count = cmp::min(max_count, self.available_read());
 
-        f(&self.store.borrow()[self.rpos..self.rpos+count]).map(|count| {
+        f(&self.store.borrow()[self.rpos..self.rpos + count]).map(|count| {
             self.rpos += count;
             count
         })
@@ -108,7 +112,8 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
                 ptr::copy(
                     &data[self.rpos] as *const u8,
                     &mut data[0] as *mut u8,
-                    self.available_read());
+                    self.available_read(),
+                );
             }
         }
 
