@@ -139,15 +139,17 @@ impl BorrowMut<[u8]> for DefaultBufferStore {
 
 #[cfg(test)]
 mod tests {
+    use core::convert::Infallible;
+
     extern crate std;
 
     const DATA: &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     const LEN: usize = 5;
-    type Buf = crate::buffer::Buffer<generic_array::typenum::consts::U5>;
+    type Buf = crate::buffer::Buffer<[u8; LEN]>;
 
     #[test]
     fn write() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         assert_eq!(b.write(&DATA[0..2]), 2);
         assert_eq!(b.available_write(), LEN - 2);
@@ -160,24 +162,27 @@ mod tests {
 
     #[test]
     fn read() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         assert_eq!(b.write(&DATA[0..4]), 4);
 
         b.read(3, |data| {
             assert_eq!(data, &DATA[0..3]);
+            Ok::<usize, Infallible>(3)
         });
         b.read(1, |data| {
             assert_eq!(data, &DATA[3..4]);
+            Ok::<usize, Infallible>(1)
         });
         b.read(1, |data| {
             assert_eq!(data, &[]);
+            Ok::<usize, Infallible>(1)
         });
     }
 
     #[test]
     fn clear() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         b.write(&DATA[0..2]);
         b.clear();
@@ -188,16 +193,18 @@ mod tests {
 
     #[test]
     fn discard() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         assert_eq!(b.write(&DATA[0..4]), 4);
         b.read(2, |data| {
             assert_eq!(data, &DATA[0..2]);
+            Ok::<usize, Infallible>(2)
         });
 
         assert_eq!(b.write(&DATA[4..7]), 3);
         b.read(5, |data| {
             assert_eq!(data, &DATA[2..7]);
+            Ok::<usize, Infallible>(5)
         });
 
         assert_eq!(b.available_read(), 0);
