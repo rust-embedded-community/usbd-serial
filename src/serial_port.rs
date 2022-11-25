@@ -41,34 +41,57 @@ enum WriteState {
     Full(usize),
 }
 
-impl<B> SerialPort<'_, B>
+impl<'a, B> SerialPort<'a, B>
 where
     B: UsbBus,
 {
     /// Creates a new USB serial port with the provided UsbBus and 128 byte read/write buffers.
-    pub fn new(
-        alloc: &UsbBusAllocator<B>,
-    ) -> SerialPort<'_, B, DefaultBufferStore, DefaultBufferStore> {
-        SerialPort::new_with_store(alloc, unsafe { mem::uninitialized() }, unsafe {
-            mem::uninitialized()
-        })
+    pub fn new<'alloc: 'a>(
+        alloc: &'alloc UsbBusAllocator<B>,
+    ) -> SerialPort<'a, B, DefaultBufferStore, DefaultBufferStore> {
+        Self::new_with_interface_names(alloc, None, None)
+    }
+    /// Same as SerialPort::new, but allows specifying the names of the interfaces
+    pub fn new_with_interface_names<'alloc: 'a>(
+        alloc: &'alloc UsbBusAllocator<B>,
+        comm_if_name: Option<&'static str>,
+        data_if_name: Option<&'static str>,
+    ) -> SerialPort<'a, B, DefaultBufferStore, DefaultBufferStore> {
+        SerialPort::new_with_store_and_interface_names(
+            alloc,
+            unsafe { mem::uninitialized() },
+            unsafe { mem::uninitialized() },
+            comm_if_name,
+            data_if_name,
+        )
     }
 }
 
-impl<B, RS, WS> SerialPort<'_, B, RS, WS>
+impl<'a, B, RS, WS> SerialPort<'a, B, RS, WS>
 where
     B: UsbBus,
     RS: BorrowMut<[u8]>,
     WS: BorrowMut<[u8]>,
 {
     /// Creates a new USB serial port with the provided UsbBus and buffer backing stores.
-    pub fn new_with_store(
-        alloc: &UsbBusAllocator<B>,
+    pub fn new_with_store<'alloc: 'a>(
+        alloc: &'alloc UsbBusAllocator<B>,
         read_store: RS,
         write_store: WS,
-    ) -> SerialPort<'_, B, RS, WS> {
+    ) -> SerialPort<'a, B, RS, WS> {
+        Self::new_with_store_and_interface_names(alloc, read_store, write_store, None, None)
+    }
+
+    /// Creates a new USB serial port with the provided UsbBus and buffer backing stores.
+    pub fn new_with_store_and_interface_names<'alloc: 'a>(
+        alloc: &'alloc UsbBusAllocator<B>,
+        read_store: RS,
+        write_store: WS,
+        comm_if_name: Option<&'static str>,
+        data_if_name: Option<&'static str>,
+    ) -> SerialPort<'a, B, RS, WS> {
         SerialPort {
-            inner: CdcAcmClass::new(alloc, 64),
+            inner: CdcAcmClass::new_with_interface_names(alloc, 64, comm_if_name, data_if_name),
             read_buf: Buffer::new(read_store),
             write_buf: Buffer::new(write_store),
             write_state: WriteState::Idle,
@@ -214,6 +237,10 @@ where
 {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
         self.inner.get_configuration_descriptors(writer)
+    }
+
+    fn get_string(&self, index: StringIndex, lang_id: u16) -> Option<&str> {
+        self.inner.get_string(index, lang_id)
     }
 
     fn reset(&mut self) {
