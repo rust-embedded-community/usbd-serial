@@ -22,10 +22,6 @@ where
     write_state: WriteState,
 }
 
-/// If this many full size packets have been sent in a row, a short packet will be sent so that the
-/// host sees the data in a timely manner.
-const SHORT_PACKET_INTERVAL: usize = 10;
-
 /// Keeps track of the type of the last written packet.
 enum WriteState {
     /// No packets in-flight
@@ -34,10 +30,7 @@ enum WriteState {
     /// Short packet currently in-flight
     Short,
 
-    /// Full packet current in-flight. A full packet must be followed by a short packet for the host
-    /// OS to see the transaction. The data is the number of subsequent full packets sent so far. A
-    /// short packet is forced every SHORT_PACKET_INTERVAL packets so that the OS sees data in a
-    /// timely manner.
+    /// Full packet current in-flight. The data is the number of subsequent full packets sent so far.     
     Full(usize),
 }
 
@@ -168,11 +161,7 @@ where
         if buf.available_read() > 0 {
             // There's data in the write_buf, so try to write that first.
 
-            let max_write_size = if full_count >= SHORT_PACKET_INTERVAL {
-                inner.max_packet_size() - 1
-            } else {
-                inner.max_packet_size()
-            } as usize;
+            let max_write_size = inner.max_packet_size() as usize;
 
             buf.read(max_write_size, |buf_data| {
                 // This may return WouldBlock which will be propagated.
