@@ -84,7 +84,7 @@ impl<'a, B: UsbBus> CdcAcmClass<'a, B> {
                 stop_bits: StopBits::One,
                 data_bits: 8,
                 parity_type: ParityType::None,
-                data_rate: 8_000,
+                data_rate: 9_600,
             },
             dtr: false,
             rts: false,
@@ -363,7 +363,7 @@ impl Default for LineCoding {
             stop_bits: StopBits::One,
             data_bits: 8,
             parity_type: ParityType::None,
-            data_rate: 8_000,
+            data_rate: 9_600,
         }
     }
 }
