@@ -1,9 +1,9 @@
 use crate::buffer::{Buffer, DefaultBufferStore};
 use crate::cdc_acm::*;
 use core::borrow::BorrowMut;
-use core::mem;
 use core::slice;
 use usb_device::class_prelude::*;
+use usb_device::descriptor::lang_id::LangID;
 use usb_device::Result;
 
 /// USB (CDC-ACM) serial port with built-in buffering to implement stream-like behavior.
@@ -59,8 +59,8 @@ where
     ) -> SerialPort<'a, B, DefaultBufferStore, DefaultBufferStore> {
         SerialPort::new_with_store_and_interface_names(
             alloc,
-            unsafe { mem::uninitialized() },
-            unsafe { mem::uninitialized() },
+            DefaultBufferStore::default(),
+            DefaultBufferStore::default(),
             comm_if_name,
             data_if_name,
         )
@@ -165,13 +165,11 @@ where
             return Err(UsbError::WouldBlock);
         }
 
-        let r = buf.read(data.len(), |buf_data| {
-            &data[..buf_data.len()].copy_from_slice(buf_data);
+        buf.read(data.len(), |buf_data| {
+            data[..buf_data.len()].copy_from_slice(buf_data);
 
             Ok(buf_data.len())
-        });
-
-        r
+        })
     }
 
     /// Sends as much as possible of the current write buffer. Returns `Ok` if all data that has
@@ -239,7 +237,7 @@ where
         self.inner.get_configuration_descriptors(writer)
     }
 
-    fn get_string(&self, index: StringIndex, lang_id: u16) -> Option<&str> {
+    fn get_string(&self, index: StringIndex, lang_id: LangID) -> Option<&str> {
         self.inner.get_string(index, lang_id)
     }
 

@@ -55,7 +55,7 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
             return 0;
         }
 
-        &self.store.borrow_mut()[self.wpos..self.wpos + count].copy_from_slice(&data[..count]);
+        self.store.borrow_mut()[self.wpos..self.wpos + count].copy_from_slice(&data[..count]);
 
         self.wpos += count;
         count
@@ -125,6 +125,12 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
 /// Default backing store for the mediocre buffer
 pub struct DefaultBufferStore([u8; 128]);
 
+impl Default for DefaultBufferStore {
+    fn default() -> Self {
+        Self([0u8; 128])
+    }
+}
+
 impl Borrow<[u8]> for DefaultBufferStore {
     fn borrow(&self) -> &[u8] {
         &self.0
@@ -169,15 +175,18 @@ mod tests {
         b.read(3, |data| {
             assert_eq!(data, &DATA[0..3]);
             Ok::<usize, Infallible>(3)
-        });
+        })
+        .unwrap();
         b.read(1, |data| {
             assert_eq!(data, &DATA[3..4]);
             Ok::<usize, Infallible>(1)
-        });
+        })
+        .unwrap();
         b.read(1, |data| {
             assert_eq!(data, &[]);
             Ok::<usize, Infallible>(1)
-        });
+        })
+        .unwrap();
     }
 
     #[test]
@@ -199,13 +208,15 @@ mod tests {
         b.read(2, |data| {
             assert_eq!(data, &DATA[0..2]);
             Ok::<usize, Infallible>(2)
-        });
+        })
+        .unwrap();
 
         assert_eq!(b.write(&DATA[4..7]), 3);
         b.read(5, |data| {
             assert_eq!(data, &DATA[2..7]);
             Ok::<usize, Infallible>(5)
-        });
+        })
+        .unwrap();
 
         assert_eq!(b.available_read(), 0);
     }
