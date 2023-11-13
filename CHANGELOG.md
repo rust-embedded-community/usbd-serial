@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.0] - 2023-11-13
+
 ### Added
 - Support assigning interface name strings to the control and data interfaces
 - Changed default baud rate from 8000 bps to 9600 bps
@@ -23,5 +25,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 This is the initial release to crates.io.
 
-[Unreleased]: https://github.com/rust-embedded-community/usbd-serial/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/rust-embedded-community/usbd-serial/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rust-embedded-community/usbd-serial/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/rust-embedded-community/usbd-serial/compare/v0.1.0...v0.1.1
