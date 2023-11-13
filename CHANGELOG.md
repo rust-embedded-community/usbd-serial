@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Support assigning interface name strings to the control and data interfaces
 - Changed default baud rate from 8000 bps to 9600 bps
 
+### Fixed
+- [breaking] `Parity::Event` was fixed to `Parity::Even`
+
 ## [0.1.1] - 2020-10-03
 
 ## 0.1.0 - 2019-07-24
