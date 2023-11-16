@@ -138,6 +138,23 @@ where
         }
     }
 
+    /// Poll the endpoint and try to put them into the serial buffer.
+    pub(crate) fn poll(&mut self) -> Result<()> {
+        let Self {
+            inner, read_buf, ..
+        } = self;
+
+        read_buf.write_all(inner.max_packet_size() as usize, |buf_data| {
+            match inner.read_packet(buf_data) {
+                Ok(c) => Ok(c),
+                Err(UsbError::WouldBlock) => Ok(0),
+                Err(err) => Err(err),
+            }
+        })?;
+
+        Ok(())
+    }
+
     /// Reads bytes from the port into `data` and returns the number of bytes read.
     ///
     /// # Errors
@@ -146,26 +163,16 @@ where
     ///
     /// Other errors from `usb-device` may also be propagated.
     pub fn read(&mut self, data: &mut [u8]) -> Result<usize> {
-        let buf = &mut self.read_buf;
-        let inner = &mut self.inner;
-
         // Try to read a packet from the endpoint and write it into the buffer if it fits. Propagate
         // errors except `WouldBlock`.
+        self.poll()?;
 
-        buf.write_all(inner.max_packet_size() as usize, |buf_data| {
-            match inner.read_packet(buf_data) {
-                Ok(c) => Ok(c),
-                Err(UsbError::WouldBlock) => Ok(0),
-                Err(err) => Err(err),
-            }
-        })?;
-
-        if buf.available_read() == 0 {
+        if self.read_buf.available_read() == 0 {
             // No data available for reading.
             return Err(UsbError::WouldBlock);
         }
 
-        buf.read(data.len(), |buf_data| {
+        self.read_buf.read(data.len(), |buf_data| {
             data[..buf_data.len()].copy_from_slice(buf_data);
 
             Ok(buf_data.len())
