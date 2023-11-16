@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+* Added the followign `embedded-io` traits to the `SerialPort` object: `Write`, `WriteReady`,
+  `Read`, and `ReadReady`, and `ErrorType`
+
 ## [0.2.0] - 2023-11-13
 
 ### Added

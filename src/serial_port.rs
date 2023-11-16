@@ -17,8 +17,8 @@ where
     WS: BorrowMut<[u8]>,
 {
     inner: CdcAcmClass<'a, B>,
-    read_buf: Buffer<RS>,
-    write_buf: Buffer<WS>,
+    pub(crate) read_buf: Buffer<RS>,
+    pub(crate) write_buf: Buffer<WS>,
     write_state: WriteState,
 }
 
