@@ -30,7 +30,8 @@ impl<Bus: UsbBus> embedded_io::Read for SerialPort<'_, Bus> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         loop {
             match self.read(buf).map_err(From::from) {
-                // We must continue reading until at least one byte is read.
+                // We are required by `embedded-io` to continue reading until at least one byte is
+                // read.
                 Ok(0) => {}
                 Err(usb_device::UsbError::WouldBlock) => {}
                 other => return Ok(other?),
@@ -49,6 +50,8 @@ impl<Bus: UsbBus> embedded_io::Write for SerialPort<'_, Bus> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         loop {
             match self.write(buf) {
+                // We are required by `embedded-io` to continue writing until at least one byte is
+                // written.
                 Ok(0) => {}
                 Err(usb_device::UsbError::WouldBlock) => {}
                 other => return Ok(other?),
