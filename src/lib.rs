@@ -50,9 +50,11 @@
 
 mod buffer;
 mod cdc_acm;
+mod io;
 mod serial_port;
 
 pub use crate::buffer::DefaultBufferStore;
 pub use crate::cdc_acm::*;
 pub use crate::serial_port::*;
+pub use embedded_io;
 pub use usb_device::{Result, UsbError};
