@@ -42,6 +42,7 @@ impl<Bus: UsbBus> embedded_io::Read for SerialPort<'_, Bus> {
 
 impl<Bus: UsbBus> embedded_io::ReadReady for SerialPort<'_, Bus> {
     fn read_ready(&mut self) -> Result<bool, Self::Error> {
+        self.poll()?;
         Ok(self.read_buf.available_read() != 0)
     }
 }
