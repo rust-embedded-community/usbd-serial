@@ -57,20 +57,9 @@ impl<Bus: UsbBus> embedded_io::Write for SerialPort<'_, Bus> {
             match self.write(buf) {
                 // We are required by `embedded-io` to continue writing until at least one byte is
                 // written.
-                Ok(0) => {
-                    log::info!("write::0");
-                }
-                Err(usb_device::UsbError::WouldBlock) => {
-                    log::info!("write::WouldBlock");
-                }
-                Ok(n) => {
-                    log::info!("write::{n}");
-                    return Ok(n)
-                }
-                other => {
-                    log::info!("write::other");
-                    return Ok(other?)
-                }
+                Ok(0) => {}
+                Err(usb_device::UsbError::WouldBlock) => {}
+                other => return Ok(other?),
             }
         }
     }
