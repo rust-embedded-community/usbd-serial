@@ -49,13 +49,28 @@ impl<Bus: UsbBus> embedded_io::ReadReady for SerialPort<'_, Bus> {
 
 impl<Bus: UsbBus> embedded_io::Write for SerialPort<'_, Bus> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+
         loop {
             match self.write(buf) {
                 // We are required by `embedded-io` to continue writing until at least one byte is
                 // written.
-                Ok(0) => {}
-                Err(usb_device::UsbError::WouldBlock) => {}
-                other => return Ok(other?),
+                Ok(0) => {
+                    log::info!("write::0");
+                }
+                Err(usb_device::UsbError::WouldBlock) => {
+                    log::info!("write::WouldBlock");
+                }
+                Ok(n) => {
+                    log::info!("write::{n}");
+                    return Ok(n)
+                }
+                other => {
+                    log::info!("write::other");
+                    return Ok(other?)
+                }
             }
         }
     }
@@ -67,6 +82,7 @@ impl<Bus: UsbBus> embedded_io::Write for SerialPort<'_, Bus> {
 
 impl<Bus: UsbBus> embedded_io::WriteReady for SerialPort<'_, Bus> {
     fn write_ready(&mut self) -> Result<bool, Self::Error> {
+        log::info!("WriteAVail: {}", self.write_buf.available_write());
         Ok(self.write_buf.available_write() != 0)
     }
 }
