@@ -71,7 +71,6 @@ impl<Bus: UsbBus> embedded_io::Write for SerialPort<'_, Bus> {
 
 impl<Bus: UsbBus> embedded_io::WriteReady for SerialPort<'_, Bus> {
     fn write_ready(&mut self) -> Result<bool, Self::Error> {
-        log::info!("WriteAVail: {}", self.write_buf.available_write());
         Ok(self.write_buf.available_write() != 0)
     }
 }
