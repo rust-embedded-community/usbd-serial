@@ -49,6 +49,10 @@ impl<Bus: UsbBus> embedded_io::ReadReady for SerialPort<'_, Bus> {
 
 impl<Bus: UsbBus> embedded_io::Write for SerialPort<'_, Bus> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+
         loop {
             match self.write(buf) {
                 // We are required by `embedded-io` to continue writing until at least one byte is
