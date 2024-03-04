@@ -1,5 +1,5 @@
-use core::{cmp, ptr};
 use core::borrow::{Borrow, BorrowMut};
+use core::{cmp, ptr};
 
 /// A mediocre buffer that allows for block access without extra copies but memmoves more than
 /// necessary.
@@ -55,7 +55,7 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
             return 0;
         }
 
-        &self.store.borrow_mut()[self.wpos..self.wpos+count].copy_from_slice(&data[..count]);
+        self.store.borrow_mut()[self.wpos..self.wpos + count].copy_from_slice(&data[..count]);
 
         self.wpos += count;
         count
@@ -65,9 +65,11 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
     // closure for writing. The closure should return the number of bytes actually written and is
     // allowed to write less than max_bytes. If the callback returns an error, any written data is
     // ignored.
-    pub fn write_all<E>(&mut self, max_count: usize, f: impl FnOnce(&mut [u8]) -> Result<usize, E>)
-        -> Result<usize, E>
-    {
+    pub fn write_all<E>(
+        &mut self,
+        max_count: usize,
+        f: impl FnOnce(&mut [u8]) -> Result<usize, E>,
+    ) -> Result<usize, E> {
         if max_count > self.available_write_without_discard() {
             // Data doesn't fit in currently available space
             if max_count > self.available_write() {
@@ -80,7 +82,7 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
 
         assert!(self.available_write_without_discard() >= max_count);
 
-        f(&mut self.store.borrow_mut()[self.wpos..self.wpos+max_count]).map(|count| {
+        f(&mut self.store.borrow_mut()[self.wpos..self.wpos + max_count]).map(|count| {
             self.wpos += count;
             count
         })
@@ -90,12 +92,14 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
     // for reading. The closure should return the number of bytes actually read and is allowed to
     // read less than max_bytes. If the callback returns an error, the data is not discarded from
     // the buffer.
-    pub fn read<E>(&mut self, max_count: usize, f: impl FnOnce(&[u8]) -> Result<usize, E>)
-        -> Result<usize, E>
-    {
+    pub fn read<E>(
+        &mut self,
+        max_count: usize,
+        f: impl FnOnce(&[u8]) -> Result<usize, E>,
+    ) -> Result<usize, E> {
         let count = cmp::min(max_count, self.available_read());
 
-        f(&self.store.borrow()[self.rpos..self.rpos+count]).map(|count| {
+        f(&self.store.borrow()[self.rpos..self.rpos + count]).map(|count| {
             self.rpos += count;
             count
         })
@@ -108,7 +112,8 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
                 ptr::copy(
                     &data[self.rpos] as *const u8,
                     &mut data[0] as *mut u8,
-                    self.available_read());
+                    self.available_read(),
+                );
             }
         }
 
@@ -119,6 +124,12 @@ impl<S: BorrowMut<[u8]>> Buffer<S> {
 
 /// Default backing store for the mediocre buffer
 pub struct DefaultBufferStore([u8; 128]);
+
+impl Default for DefaultBufferStore {
+    fn default() -> Self {
+        Self([0u8; 128])
+    }
+}
 
 impl Borrow<[u8]> for DefaultBufferStore {
     fn borrow(&self) -> &[u8] {
@@ -134,15 +145,17 @@ impl BorrowMut<[u8]> for DefaultBufferStore {
 
 #[cfg(test)]
 mod tests {
+    use core::convert::Infallible;
+
     extern crate std;
 
     const DATA: &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     const LEN: usize = 5;
-    type Buf = crate::buffer::Buffer<generic_array::typenum::consts::U5>;
+    type Buf = crate::buffer::Buffer<[u8; LEN]>;
 
     #[test]
     fn write() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         assert_eq!(b.write(&DATA[0..2]), 2);
         assert_eq!(b.available_write(), LEN - 2);
@@ -155,24 +168,30 @@ mod tests {
 
     #[test]
     fn read() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         assert_eq!(b.write(&DATA[0..4]), 4);
 
         b.read(3, |data| {
             assert_eq!(data, &DATA[0..3]);
-        });
+            Ok::<usize, Infallible>(3)
+        })
+        .unwrap();
         b.read(1, |data| {
             assert_eq!(data, &DATA[3..4]);
-        });
+            Ok::<usize, Infallible>(1)
+        })
+        .unwrap();
         b.read(1, |data| {
             assert_eq!(data, &[]);
-        });
+            Ok::<usize, Infallible>(1)
+        })
+        .unwrap();
     }
 
     #[test]
     fn clear() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         b.write(&DATA[0..2]);
         b.clear();
@@ -183,17 +202,21 @@ mod tests {
 
     #[test]
     fn discard() {
-        let mut b = Buf::new();
+        let mut b = Buf::new([0; LEN]);
 
         assert_eq!(b.write(&DATA[0..4]), 4);
         b.read(2, |data| {
             assert_eq!(data, &DATA[0..2]);
-        });
+            Ok::<usize, Infallible>(2)
+        })
+        .unwrap();
 
         assert_eq!(b.write(&DATA[4..7]), 3);
         b.read(5, |data| {
             assert_eq!(data, &DATA[2..7]);
-        });
+            Ok::<usize, Infallible>(5)
+        })
+        .unwrap();
 
         assert_eq!(b.available_read(), 0);
     }

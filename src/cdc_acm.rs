@@ -1,6 +1,8 @@
 use core::convert::TryInto;
 use core::mem;
 use usb_device::class_prelude::*;
+use usb_device::descriptor::lang_id::LangID;
+use usb_device::device::DEFAULT_ALTERNATE_SETTING;
 use usb_device::Result;
 
 /// This should be used as `device_class` when building the `UsbDevice`.
@@ -39,8 +41,10 @@ const REQ_SET_CONTROL_LINE_STATE: u8 = 0x22;
 ///   terminated with a short packet, even if the bulk endpoint is used for stream-like data.
 pub struct CdcAcmClass<'a, B: UsbBus> {
     comm_if: InterfaceNumber,
+    comm_if_name: Option<(StringIndex, &'static str)>,
     comm_ep: EndpointIn<'a, B>,
     data_if: InterfaceNumber,
+    data_if_name: Option<(StringIndex, &'static str)>,
     read_ep: EndpointOut<'a, B>,
     write_ep: EndpointIn<'a, B>,
     line_coding: LineCoding,
@@ -48,21 +52,40 @@ pub struct CdcAcmClass<'a, B: UsbBus> {
     rts: bool,
 }
 
-impl<B: UsbBus> CdcAcmClass<'_, B> {
+impl<'a, B: UsbBus> CdcAcmClass<'a, B> {
     /// Creates a new CdcAcmClass with the provided UsbBus and max_packet_size in bytes. For
     /// full-speed devices, max_packet_size has to be one of 8, 16, 32 or 64.
-    pub fn new(alloc: &UsbBusAllocator<B>, max_packet_size: u16) -> CdcAcmClass<'_, B> {
+    pub fn new<'alloc: 'a>(
+        alloc: &'alloc UsbBusAllocator<B>,
+        max_packet_size: u16,
+    ) -> CdcAcmClass<'a, B> {
+        Self::new_with_interface_names(alloc, max_packet_size, None, None)
+    }
+
+    /// Creates a new CdcAcmClass with the provided UsbBus and max_packet_size in bytes. For
+    /// full-speed devices, max_packet_size has to be one of 8, 16, 32 or 64. Additionally,
+    /// this lets you specify optional names for the CDC interfaces, to better organize composite devices.
+    pub fn new_with_interface_names<'alloc: 'a>(
+        alloc: &'alloc UsbBusAllocator<B>,
+        max_packet_size: u16,
+        comm_if_name: Option<&'static str>,
+        data_if_name: Option<&'static str>,
+    ) -> CdcAcmClass<'a, B> {
+        let comm_if_name = comm_if_name.map(|s| (alloc.string(), s));
+        let data_if_name = data_if_name.map(|s| (alloc.string(), s));
         CdcAcmClass {
             comm_if: alloc.interface(),
+            comm_if_name,
             comm_ep: alloc.interrupt(8, 255),
             data_if: alloc.interface(),
+            data_if_name,
             read_ep: alloc.bulk(max_packet_size),
             write_ep: alloc.bulk(max_packet_size),
             line_coding: LineCoding {
                 stop_bits: StopBits::One,
                 data_bits: 8,
                 parity_type: ParityType::None,
-                data_rate: 8_000,
+                data_rate: 9_600,
             },
             dtr: false,
             rts: false,
@@ -120,13 +143,16 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
             USB_CLASS_CDC,
             CDC_SUBCLASS_ACM,
             CDC_PROTOCOL_NONE,
+            None,
         )?;
 
-        writer.interface(
+        writer.interface_alt(
             self.comm_if,
+            DEFAULT_ALTERNATE_SETTING,
             USB_CLASS_CDC,
             CDC_SUBCLASS_ACM,
             CDC_PROTOCOL_NONE,
+            self.comm_if_name.map(|n| n.0),
         )?;
 
         writer.write(
@@ -166,12 +192,27 @@ impl<B: UsbBus> UsbClass<B> for CdcAcmClass<'_, B> {
 
         writer.endpoint(&self.comm_ep)?;
 
-        writer.interface(self.data_if, USB_CLASS_CDC_DATA, 0x00, 0x00)?;
+        writer.interface_alt(
+            self.data_if,
+            DEFAULT_ALTERNATE_SETTING,
+            USB_CLASS_CDC_DATA,
+            0x00,
+            0x00,
+            self.data_if_name.map(|n| n.0),
+        )?;
 
         writer.endpoint(&self.write_ep)?;
         writer.endpoint(&self.read_ep)?;
 
         Ok(())
+    }
+
+    fn get_string(&self, index: StringIndex, _lang_id: LangID) -> Option<&str> {
+        match (self.comm_if_name, self.data_if_name) {
+            (Some((i, s)), _) if i == index => Some(s),
+            (_, Some((i, s))) if i == index => Some(s),
+            _ => None,
+        }
     }
 
     fn reset(&mut self) {
@@ -275,7 +316,7 @@ impl From<u8> for StopBits {
 pub enum ParityType {
     None = 0,
     Odd = 1,
-    Event = 2,
+    Even = 2,
     Mark = 3,
     Space = 4,
 }
@@ -329,7 +370,7 @@ impl Default for LineCoding {
             stop_bits: StopBits::One,
             data_bits: 8,
             parity_type: ParityType::None,
-            data_rate: 8_000,
+            data_rate: 9_600,
         }
     }
 }
