@@ -124,14 +124,24 @@ impl<'a, B: UsbBus> CdcAcmClass<'a, B> {
         self.read_ep.read(data)
     }
 
-    /// Gets the address of the IN endpoint.
-    pub fn write_ep_address(&self) -> EndpointAddress {
-        self.write_ep.address()
+    /// Gets the IN endpoint.
+    pub fn write_ep(&self) -> &EndpointIn<'a, B> {
+        &self.write_ep
     }
 
-    /// Gets the address of the OUT endpoint.
-    pub fn read_ep_address(&self) -> EndpointAddress {
-        self.read_ep.address()
+    /// Mutably gets the IN endpoint.
+    pub fn write_ep_mut(&mut self) -> &mut EndpointIn<'a, B> {
+        &mut self.write_ep
+    }
+
+    /// Gets the OUT endpoint.
+    pub fn read_ep(&self) -> &EndpointOut<'a, B> {
+        &self.read_ep
+    }
+
+    /// Mutably gets the OUT endpoint.
+    pub fn read_ep_mut(&mut self) -> &mut EndpointOut<'a, B> {
+        &mut self.read_ep
     }
 }
 
