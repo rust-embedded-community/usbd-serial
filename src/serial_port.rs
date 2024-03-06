@@ -256,7 +256,7 @@ where
     }
 
     fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
-        if addr == self.inner.write_ep_address() {
+        if addr == self.inner.write_ep().address() {
             self.flush().ok();
         }
     }
