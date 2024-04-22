@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+No unreleased changes yet!
+
+## [0.2.2] - 2024-04-22
+
 ### Fixed
 * Fixed an issue where the `embedded-io` traits were not implemented if custom buffers were used.
 
@@ -36,7 +40,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 This is the initial release to crates.io.
 
-[Unreleased]: https://github.com/rust-embedded-community/usbd-serial/compare/v0.2.1...HEAD
-[0.2.0]: https://github.com/rust-embedded-community/usbd-serial/releases/tag/v0.2.1
+[Unreleased]: https://github.com/rust-embedded-community/usbd-serial/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/rust-embedded-community/usbd-serial/releases/tag/v0.2.2
+[0.2.1]: https://github.com/rust-embedded-community/usbd-serial/releases/tag/v0.2.1
 [0.2.0]: https://github.com/rust-embedded-community/usbd-serial/releases/tag/v0.2.0
 [0.1.1]: https://github.com/rust-embedded-community/usbd-serial/compare/v0.1.0...v0.1.1
