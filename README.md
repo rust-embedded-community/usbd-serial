@@ -20,7 +20,8 @@ follows:
 let mut serial = SerialPort::new(&usb_bus);
 
 let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
-    .product("Serial port")
+    .strings(&[StringDescriptors::new(LangID::EN).product("Serial port")])
+    .expect("Failed to set strings")
     .device_class(USB_CLASS_CDC)
     .build();
 
