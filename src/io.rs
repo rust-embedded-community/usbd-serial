@@ -91,6 +91,61 @@ impl<Bus: UsbBus, RS: BorrowMut<[u8]>, WS: BorrowMut<[u8]>> embedded_io::WriteRe
     }
 }
 
+impl<B, RS, WS> embedded_io_async::Write for SerialPort<'_, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    async fn write(&mut self, buffer: &[u8]) -> core::result::Result<usize, Self::Error> {
+        if buffer.is_empty() {
+            return Ok(0);
+        }
+        AsyncWrite {
+            serial_port: self,
+            buffer,
+        }
+        .await
+    }
+
+    // async fn flush(&mut self) -> core::result::Result<(), Self::Error> {
+    //     todo!()
+    // }
+}
+struct AsyncWrite<'a, 'b, 'c, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    serial_port: &'a mut SerialPort<'b, B, RS, WS>,
+    buffer: &'c [u8],
+}
+
+impl<'a, 'b, 'c, B, RS, WS> Future for AsyncWrite<'a, 'b, 'c, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    type Output = Result<usize, Error>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let s = self.get_mut();
+        match s.serial_port.write(&s.buffer) {
+            Ok(n) => Poll::Ready(Ok(n)),
+            Err(usb_device::UsbError::WouldBlock) => {
+                // No need to worry about overriding.
+                // The ownership is borrowed though the mutable reference,
+                // so it's impossable to run twice at the same time.
+                s.serial_port.write_waker = Some(cx.waker().clone());
+                Poll::Pending
+            }
+            Err(err) => Poll::Ready(Err(Error(err))),
+        }
+    }
+}
+
 impl<B, RS, WS> embedded_io_async::Read for SerialPort<'_, B, RS, WS>
 where
     B: UsbBus,
@@ -127,19 +182,15 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let s = self.get_mut();
         match s.serial_port.read(&mut s.buffer) {
-            Ok(len) => Poll::Ready(Ok(len)),
+            Ok(n) => Poll::Ready(Ok(n)),
             Err(usb_device::UsbError::WouldBlock) => {
                 if s.buffer.len() == 0 {
                     Poll::Ready(Ok(0))
                 } else {
-                    let prev = s.serial_port.read_waker.replace(cx.waker().clone());
-                    assert!(
-                        prev.is_none(),
-                        concat!(
-                            "The ownership is borrowed though the mutable reference.",
-                            "Impossable to run twice at the same time"
-                        )
-                    );
+                    // No need to worry about overriding.
+                    // The ownership is borrowed though the mutable reference,
+                    // so it's impossable to run twice at the same time.
+                    s.serial_port.read_waker = Some(cx.waker().clone());
                     Poll::Pending
                 }
             }

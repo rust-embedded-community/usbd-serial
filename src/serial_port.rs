@@ -23,6 +23,7 @@ where
     write_state: WriteState,
 
     pub(crate) read_waker: Option<Waker>,
+    pub(crate) write_waker: Option<Waker>,
 }
 
 /// If this many full size packets have been sent in a row, a short packet will be sent so that the
@@ -99,6 +100,7 @@ where
             write_buf: Buffer::new(write_store),
             write_state: WriteState::Idle,
             read_waker: None,
+            write_waker: None,
         }
     }
 
@@ -265,6 +267,9 @@ where
     fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
         if addr == self.inner.write_ep().address() {
             self.flush().ok();
+            if let Some(write_waker) = self.write_waker.take() {
+                write_waker.wake();
+            }
         }
     }
 
