@@ -2,6 +2,7 @@ use crate::buffer::{Buffer, DefaultBufferStore};
 use crate::cdc_acm::*;
 use core::borrow::BorrowMut;
 use core::slice;
+use core::task::Waker;
 use usb_device::class_prelude::*;
 use usb_device::descriptor::lang_id::LangID;
 use usb_device::Result;
@@ -20,6 +21,8 @@ where
     pub(crate) read_buf: Buffer<RS>,
     pub(crate) write_buf: Buffer<WS>,
     write_state: WriteState,
+
+    pub(crate) read_waker: Option<Waker>,
 }
 
 /// If this many full size packets have been sent in a row, a short packet will be sent so that the
@@ -95,6 +98,7 @@ where
             read_buf: Buffer::new(read_store),
             write_buf: Buffer::new(write_store),
             write_state: WriteState::Idle,
+            read_waker: None,
         }
     }
 
@@ -151,6 +155,9 @@ where
                 Err(err) => Err(err),
             }
         })?;
+        if let Some(read_waker) = self.read_waker.take() {
+            read_waker.wake();
+        }
 
         Ok(())
     }

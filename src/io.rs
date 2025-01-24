@@ -1,5 +1,10 @@
 use super::SerialPort;
-use core::borrow::BorrowMut;
+use core::{
+    borrow::BorrowMut,
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 use usb_device::bus::UsbBus;
 
 #[derive(Debug)]
@@ -83,5 +88,62 @@ impl<Bus: UsbBus, RS: BorrowMut<[u8]>, WS: BorrowMut<[u8]>> embedded_io::WriteRe
 {
     fn write_ready(&mut self) -> Result<bool, Self::Error> {
         Ok(self.write_buf.available_write() != 0)
+    }
+}
+
+impl<B, RS, WS> embedded_io_async::Read for SerialPort<'_, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    async fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
+        AsyncRead {
+            serial_port: self,
+            buffer,
+        }
+        .await
+    }
+}
+
+struct AsyncRead<'a, 'b, 'c, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    serial_port: &'a mut SerialPort<'b, B, RS, WS>,
+    buffer: &'c mut [u8],
+}
+
+impl<'a, 'b, 'c, B, RS, WS> Future for AsyncRead<'a, 'b, 'c, B, RS, WS>
+where
+    B: UsbBus,
+    RS: BorrowMut<[u8]>,
+    WS: BorrowMut<[u8]>,
+{
+    type Output = Result<usize, Error>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let s = self.get_mut();
+        match s.serial_port.read(&mut s.buffer) {
+            Ok(len) => Poll::Ready(Ok(len)),
+            Err(usb_device::UsbError::WouldBlock) => {
+                if s.buffer.len() == 0 {
+                    Poll::Ready(Ok(0))
+                } else {
+                    let prev = s.serial_port.read_waker.replace(cx.waker().clone());
+                    assert!(
+                        prev.is_none(),
+                        concat!(
+                            "The ownership is borrowed though the mutable reference.",
+                            "Impossable to run twice at the same time"
+                        )
+                    );
+                    Poll::Pending
+                }
+            }
+            Err(err) => Poll::Ready(Err(Error(err))),
+        }
     }
 }
