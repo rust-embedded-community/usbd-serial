@@ -11,6 +11,14 @@ impl From<usb_device::UsbError> for Error {
     }
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl core::error::Error for Error {}
+
 impl embedded_io::Error for Error {
     fn kind(&self) -> embedded_io::ErrorKind {
         match self.0 {
