@@ -2,7 +2,7 @@
 name = "usbd-serial"
 description = "USB CDC-ACM serial port class for use with usb-device."
 version = "0.2.2"
-edition = "2018"
+edition = "2024"
 readme = "README.md"
 keywords = ["no-std", "usb-device"]
 license = "MIT"
