@@ -1,9 +1,9 @@
 use core::convert::TryInto;
 use core::mem;
+use usb_device::Result;
 use usb_device::class_prelude::*;
 use usb_device::descriptor::lang_id::LangID;
 use usb_device::device::DEFAULT_ALTERNATE_SETTING;
-use usb_device::Result;
 
 /// This should be used as `device_class` when building the `UsbDevice`.
 pub const USB_CLASS_CDC: u8 = 0x02;
