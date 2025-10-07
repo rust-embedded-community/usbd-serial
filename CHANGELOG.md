@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-No unreleased changes yet!
+### Changed
+* `embedded-io` version changed from 0.6.x to 0.7.x
+* Rust edition changed from 2018 to 2024
+
+### Added
+* Implemented `core::fmt::Display` and `core::error::Error` for `io::Error` to
+  allow for compatability with `embedded-io` 0.7.x
 
 ## [0.2.2] - 2024-04-22
 
